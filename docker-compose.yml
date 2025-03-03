@@ -5,12 +5,12 @@ services:
     image: app_nextlumibot:latest
     build: .
     ports:
-      - "3000:3000"
+      - "5173:3000"
     networks:
-      - lumibot
+      - network_public
     environment:
       - NODE_ENV=development
-      - DATABASE_URL=postgresql://postgres:lumibot@168.119.247.230:5432/products?schema=public
+      - DATABASE_URL=postgresql://postgres:lumibot@127.0.0.1:5432/products?schema=public
     depends_on:
       - db
     command: npm run dev
@@ -38,7 +38,7 @@ services:
     
 
 networks:
-  lumibot:
+  network_public:
     external: true
-    name: lumibot
+    name: network_public
 

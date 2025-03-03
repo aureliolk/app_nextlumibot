@@ -11,14 +11,29 @@ export async function GET(req: Request) {
     }
 
     const normalizedTitle = normalizeSearchText(title);
+
+    // Busca no Prisma com mais flexibilidade
     const products = await prisma.product.findMany({
       where: {
         name: {
           contains: normalizedTitle,
-          mode: 'insensitive', // Busca case-insensitive
+          mode: 'insensitive', // Case-insensitive
         },
       },
     });
+
+    // Opcional: Se nenhum resultado for encontrado, tentar busca parcial ou alternativa
+    if (products.length === 0) {
+      const partialProducts = await prisma.product.findMany({
+        where: {
+          name: {
+            contains: normalizedTitle.slice(0, 3), // Busca pelos primeiros 3 caracteres
+            mode: 'insensitive',
+          },
+        },
+      });
+      return NextResponse.json(partialProducts);
+    }
 
     return NextResponse.json(products);
   } catch (error) {
