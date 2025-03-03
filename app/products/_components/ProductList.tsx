@@ -4,7 +4,7 @@
 import { useState, useTransition } from 'react';
 import ProductForm from './ProductForm'; // Ajuste o caminho conforme necessário
 
-// Interface Product (mova isso para um arquivo separado se preferir)
+// Interface Product
 interface Product {
   id: number;
   url: string;
@@ -20,7 +20,7 @@ interface Product {
   created_at: Date;
 }
 
-// Interface ProductFormData (mova isso para um arquivo separado se preferir)
+// Interface ProductFormData
 interface ProductFormData {
   name: string;
   url: string;
@@ -42,7 +42,13 @@ export default function ProductList({ products }: ProductListProps) {
   const [productList, setProductList] = useState<Product[]>(products);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [searchTerm, setSearchTerm] = useState(''); // Novo estado para o termo de busca
   const [isPending, startTransition] = useTransition();
+
+  // Função para filtrar produtos com base no termo de busca
+  const filteredProducts = productList.filter(product =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const handleDeleteProduct = async (id: number) => {
     if (window.confirm('Tem certeza que deseja excluir este produto?')) {
@@ -137,16 +143,26 @@ export default function ProductList({ products }: ProductListProps) {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Gerenciar Produtos</h1>
-        <button
-          onClick={() => {
-            setEditingProduct(null);
-            setShowAddForm(!showAddForm);
-          }}
-          className={`px-4 py-2 rounded ${showAddForm ? 'bg-gray-500 text-white' : 'bg-blue-600 text-white'}`}
-          disabled={isPending}
-        >
-          {showAddForm ? 'Cancelar' : 'Adicionar Produto'}
-        </button>
+        {/* Input para busca */}
+        <div className="flex items-center space-x-2">
+          <input
+            type="text"
+            placeholder="Buscar por nome..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="px-4 py-2 border rounded-md w-64"
+          />
+          <button
+            onClick={() => {
+              setEditingProduct(null);
+              setShowAddForm(!showAddForm);
+            }}
+            className={`px-4 py-2 rounded ${showAddForm ? 'bg-gray-500 text-white' : 'bg-blue-600 text-white'}`}
+            disabled={isPending}
+          >
+            {showAddForm ? 'Cancelar' : 'Adicionar Produto'}
+          </button>
+        </div>
       </div>
 
       {showAddForm && (
@@ -175,8 +191,8 @@ export default function ProductList({ products }: ProductListProps) {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {productList.length > 0 ? (
-              productList.map(product => (
+            {filteredProducts.length > 0 ? (
+              filteredProducts.map(product => (
                 <tr key={product.id}>
                   <td className="px-6 py-4 text-sm text-gray-500 w-16">{product.id}</td>
                   <td className="px-6 py-4 w-20">
