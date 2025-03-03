@@ -1,0 +1,26 @@
+// prisma/schema.prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Product {
+  id          Int           @id @default(autoincrement())
+  name        String
+  url         String
+  price       Float
+  description String?
+  brand       String?
+  gender      String?
+  image       String?
+  categories  Json          // Array de strings, como ["Sutiãs > Tomara Que Caia", ...]
+  variations  Json          // Array de objetos, como [{ name: "Cor", value: "Preto" }, ...]
+  active      Boolean       @default(true)
+  created_at  DateTime      @default(now())
+
+  @@map("products")
+}
