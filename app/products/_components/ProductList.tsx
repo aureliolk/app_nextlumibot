@@ -226,6 +226,13 @@ export default function ProductList({ products }: ProductListProps) {
                   <td className="px-6 py-4 text-sm font-medium w-32">
                     <div className="flex flex-col space-y-1">
                       <button
+                        onClick={() => window.location.href = `https://duhellen.com.br/produtos/${product.url}` }
+                        className="text-green-600 hover:text-green-900 cursor-pointer text-left"
+                        disabled={isPending}
+                      >
+                        Ver
+                      </button>
+                      <button
                         onClick={() => handleEditProduct(product)}
                         className="text-indigo-600 hover:text-indigo-900 text-left"
                         disabled={isPending}
