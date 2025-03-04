@@ -142,7 +142,7 @@ export default function ProductList({ products }: ProductListProps) {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Gerenciar Produtos Lumibot</h1>
+        <h1 className="text-3xl font-bold">Gerenciar Produtos</h1>
         {/* Input para busca */}
         <div className="flex items-center space-x-2">
           <input

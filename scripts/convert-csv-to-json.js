@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Caminho para o arquivo CSV
-const csvFilePath = path.join(__dirname, '../public/tiendanube-782202-1740155587994758082.csv');
+const csvFilePath = path.join(__dirname, '../public/tiendanube-782202-17410478381561394406.csv');
 // Caminho para o arquivo JSON de saída
 const jsonOutputPath = path.join(__dirname, '../public/products.json');
 
