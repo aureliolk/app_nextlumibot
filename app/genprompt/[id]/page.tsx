@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
 import { ComponentPropsWithoutRef } from 'react'
 import { useParams } from 'next/navigation'
+import { format } from 'date-fns'
 
 // Declaração para o conversor de áudio WebM para MP3
 declare global {
@@ -82,6 +83,19 @@ const convertWebmToMp3 = async (webmBlob: Blob): Promise<Blob> => {
   });
 };
 
+// Interface para os prompts
+interface PromptHistory {
+  id: string;
+  account_id: string;
+  prompt: string;
+  created_at: string;
+  analysis?: string;
+  prompt_created?: string;
+  prompt_removed?: string;
+  prompt_complete?: string;
+  quality_checks?: string[];
+}
+
 function GenPrompt() {
 
   // Componente principal com o conteúdo original
@@ -100,6 +114,8 @@ function GenPrompt() {
   const [audioVisualizerData, setAudioVisualizerData] = useState<number[]>([]) // Para armazenar dados da visualização de áudio
   const [isConverting, setIsConverting] = useState(false) // Estado para indicar conversão de áudio
   const [conversionProgress, setConversionProgress] = useState('') // Progresso da conversão
+  const [promptHistory, setPromptHistory] = useState<PromptHistory[]>([]) // Lista de prompts salvos
+  const [showPromptHistory, setShowPromptHistory] = useState(false) // Controla a exibição do histórico
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const timerRef = useRef<number | null>(null)
@@ -120,7 +136,8 @@ function GenPrompt() {
       setIsLoading(true)
       setResponse('')
 
-      const response = await fetch('https://webhookn8n.lumibot.com.br/webhook/create/prompt', {
+      // Primeiro obtemos a resposta da API externa
+      const externalResponse = await fetch('https://webhookn8n.lumibot.com.br/webhook/create/prompt', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -132,21 +149,59 @@ function GenPrompt() {
         })
       })
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+      if (!externalResponse.ok) {
+        throw new Error(`HTTP error! status: ${externalResponse.status}`)
       }
 
-      const data = await response.json()
-
-      // Melhorar o processamento da resposta
-      const formattedResponse = data[0].text
+      const externalData = await externalResponse.json()
+      console.log('Resposta da API externa:', externalData)
+      
+      // Verificar se a resposta tem o formato esperado
+      if (!externalData || !externalData[0] || !externalData[0].response) {
+        throw new Error('Formato de resposta inválido da API externa')
+      }
+      
+      // Processar a resposta
+      const apiResponseText = externalData[0].response
         .replace(/\\n/g, '\n')          // Converter \n literal em quebras de linha reais
         .replace(/\\\"/g, '"')          // Converter \" em "
         .replace(/\\/g, '')             // Remover barras invertidas extras
         .replace(/\n\n+/g, '\n\n')      // Normalizar múltiplas quebras de linha
         .trim()                         // Remover espaços em branco extras
 
-      setResponse(formattedResponse)
+      setResponse(apiResponseText)
+      
+      // Salvar o prompt no nosso banco de dados
+      const saveResponse = await fetch('/api/prompts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: prompt,
+          promptParam: promptParam.id,
+          apiResponse: apiResponseText
+        })
+      })
+      
+      if (!saveResponse.ok) {
+        console.error('Erro ao salvar prompt no banco de dados:', await saveResponse.text())
+      } else {
+        console.log('Prompt salvo com sucesso no banco de dados')
+        const savedData = await saveResponse.json()
+        console.log('Dados salvos:', savedData)
+      }
+      
+      // Buscar o histórico atualizado de prompts
+      const historyResponse = await fetch(`/api/prompts?accountId=${promptParam.id}`)
+      
+      if (historyResponse.ok) {
+        const promptsData = await historyResponse.json()
+        console.log('Histórico de prompts atualizado:', promptsData)
+        setPromptHistory(promptsData)
+      } else {
+        console.error('Erro ao buscar histórico de prompts:', await historyResponse.text())
+      }
     } catch (error) {
       console.error('Error:', error)
       setError(error instanceof Error ? error.message : 'Failed to get response from server')
@@ -158,26 +213,38 @@ function GenPrompt() {
 
   useEffect(() => {
     console.log('useEffect executado')
-    // Use the promptParam from useParams instead of parsing the URL manually
-    console.log('Parâmetro encontrado:', promptParam)
     
     if (promptParam && promptParam.id.length > 0) {
       console.log('Fazendo requisição com o prompt:', promptParam)
-      fetch('https://webhookn8n.lumibot.com.br/webhook/list/prompt', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ account_id: promptParam.id }),
-      })
-        .then(response => response.json())
-        .then(data => {
-          console.log('Resposta recebida:', data)
-          setResponse(data[0].prompt)
-        })
-        .catch(error => {
-          console.error('Erro na requisição:', error)
-        })
+      
+      // Buscar o histórico de prompts do nosso banco de dados
+      const fetchPromptData = async () => {
+        try {
+          // Buscar o histórico de prompts
+          const historyResponse = await fetch(`/api/prompts?accountId=${promptParam.id}`)
+          
+          if (historyResponse.ok) {
+            const promptsData = await historyResponse.json()
+            
+            // Atualizar o histórico
+            setPromptHistory(promptsData)
+            
+            // Se existir algum prompt, mostrar o mais recente na área de resposta
+            if (promptsData && promptsData.length > 0) {
+              const latestPrompt = promptsData[0] // Como ordenamos por data decrescente, o primeiro é o mais recente
+              // Verifica se temos o prompt_complete, caso contrário usa o prompt original
+              setResponse(latestPrompt.prompt_complete || latestPrompt.prompt)
+            }
+          } else {
+            console.error('Erro ao buscar dados dos prompts:', await historyResponse.text())
+          }
+        } catch (error) {
+          console.error('Erro ao buscar dados dos prompts:', error)
+          }
+      }
+      
+      // Executar a busca de dados
+      fetchPromptData()
     }
   }, [promptParam]) 
 
@@ -265,7 +332,7 @@ function GenPrompt() {
       formData.append('inputType', 'audio') // Identificador para o backend saber que é um áudio
       
       if (promptParam) {
-        formData.append('promptParam', promptParam.id)
+        formData.append('account_id', promptParam.id)
       }
 
       // FormData vai configurar o Content-Type como multipart/form-data automaticamente
@@ -279,16 +346,59 @@ function GenPrompt() {
       }
 
       const data = await response.json()
+      console.log('Resposta da API de upload de áudio:', data)
+      
+      // Verifica se a resposta tem o formato esperado
+      if (!data || !data[0] || !data[0].text) {
+        throw new Error('Formato de resposta inválido da API de áudio')
+      }
       
       // Processa a resposta da mesma forma que o texto
-      const formattedResponse = data[0].text
+      const apiResponseText = data[0].text
         .replace(/\\n/g, '\n')
         .replace(/\\\"/g, '"')
         .replace(/\\/g, '')
         .replace(/\n\n+/g, '\n\n')
         .trim()
       
-      setResponse(formattedResponse)
+      setResponse(apiResponseText)
+      
+      // Salvar o prompt no nosso banco de dados
+      try {
+        console.log('Salvando resultado do upload de áudio no banco de dados')
+        const saveResponse = await fetch('/api/prompts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            text: `Áudio: ${finalFile.name}`,
+            promptParam: promptParam.id,
+            apiResponse: apiResponseText
+          })
+        })
+        
+        if (!saveResponse.ok) {
+          console.error('Erro ao salvar prompt do áudio no banco de dados:', await saveResponse.text())
+        } else {
+          console.log('Prompt de áudio salvo com sucesso')
+          const savedData = await saveResponse.json()
+          console.log('Dados do áudio salvos:', savedData)
+        }
+        
+        // Buscar o histórico atualizado de prompts
+        const historyResponse = await fetch(`/api/prompts?accountId=${promptParam.id}`)
+        
+        if (historyResponse.ok) {
+          const promptsData = await historyResponse.json()
+          console.log('Histórico de prompts atualizado após áudio:', promptsData)
+          setPromptHistory(promptsData)
+        } else {
+          console.error('Erro ao buscar histórico de prompts após áudio:', await historyResponse.text())
+        }
+      } catch (dbError) {
+        console.error('Erro ao interagir com o banco de dados:', dbError)
+      }
       
       // Limpar o arquivo após envio bem-sucedido
       setAudioFile(null)
@@ -482,6 +592,47 @@ function GenPrompt() {
       fileInputRef.current.click()
     }
   }
+  
+  // Função para restaurar um prompt
+  const restorePrompt = async (promptId: string) => {
+    try {
+      setIsLoading(true)
+      setError('')
+      
+      // Fazer a requisição para nossa API interna
+      const response = await fetch('/api/prompts/restore', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ promptId })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      // Atualizar a resposta com o prompt completo ou original
+      if (data.success) {
+        // Mostrar o prompt completo se existir, caso contrário o original
+        setResponse(data.prompt)
+      } else {
+        throw new Error('Falha ao restaurar o prompt')
+      }
+    } catch (error) {
+      console.error('Erro ao restaurar prompt:', error)
+      setError(error instanceof Error ? error.message : 'Falha ao restaurar o prompt')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+  
+  // Função para alternar a exibição do histórico de prompts
+  const togglePromptHistory = () => {
+    setShowPromptHistory(!showPromptHistory)
+  }
 
   return (
     <div className="min-h-screen bg-gray-900 py-6 flex flex-col justify-center sm:py-12">
@@ -672,7 +823,58 @@ function GenPrompt() {
             </form>
 
             <div className="mt-8">
-              <h2 className="text-sm font-medium text-gray-300 mb-4">Instrução Gerada:</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-sm font-medium text-gray-300">Instrução Gerada:</h2>
+                <button
+                  type="button"
+                  onClick={togglePromptHistory}
+                  className="text-xs px-3 py-1 rounded-md bg-orange-600 hover:bg-orange-700 text-white transition-colors"
+                >
+                  {showPromptHistory ? 'Esconder Histórico' : 'Mostrar Histórico'}
+                </button>
+              </div>
+              
+              {/* Histórico de prompts */}
+              {showPromptHistory && (
+                <div className="mb-6 bg-gray-700 rounded-lg overflow-hidden">
+                  <div className="p-3 bg-gray-600 border-b border-gray-500">
+                    <h3 className="text-sm font-medium text-white">Histórico de Instruções</h3>
+                    <p className="text-xs text-gray-300 mt-1">Clique em uma instrução para restaurá-la</p>
+                  </div>
+                  
+                  <div className="max-h-64 overflow-y-auto">
+                    {promptHistory.length > 0 ? (
+                      <ul className="divide-y divide-gray-600">
+                        {promptHistory.map((item) => (
+                          <li key={item.id} className="p-3 hover:bg-gray-600 transition-colors">
+                            <button
+                              onClick={() => restorePrompt(item.id)}
+                              className="w-full text-left"
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1 pr-4">
+                                  <p className="text-xs font-medium text-white line-clamp-2">
+                                    {item.prompt?.substring(0, 150)}
+                                    {item.prompt?.length > 150 ? '...' : ''}
+                                  </p>
+                                </div>
+                                <span className="text-xs text-gray-400 whitespace-nowrap">
+                                  {item.created_at ? format(new Date(item.created_at), 'dd/MM/yy HH:mm') : '-'}
+                                </span>
+                              </div>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="p-4 text-center text-gray-400 text-sm">
+                        Nenhuma instrução no histórico
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               <div className="bg-gray-700 text-gray-300 text-sm font-extralight rounded-lg p-6 min-h-[200px] overflow-auto">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full">
