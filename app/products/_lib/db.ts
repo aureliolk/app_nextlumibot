@@ -1,7 +1,14 @@
 // lib/db.ts
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+// Inicializar com a URL específica para produtos
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL_PRODUCTS
+    }
+  }
+});
 
 export default prisma;
 

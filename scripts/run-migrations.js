@@ -12,14 +12,6 @@ dotenv.config();
 
 const { Pool } = pg;
 
-// Configuração inicial para conectar ao postgres sem um banco de dados específico
-const initialPool = new Pool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: 'postgres' // Conecta ao banco postgres padrão primeiro
-});
 
 // Configuração do banco de dados usando variáveis de ambiente
 const pool = new Pool({

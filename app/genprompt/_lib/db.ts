@@ -112,16 +112,46 @@ export function processApiResponse(response: string): {
         console.log('Análise encontrada');
       } else if (section.includes('### Parte do prompt que vai ser criada ou alterada:') || 
                 section.includes('## ### Parte do prompt que vai ser criada ou alterada:')) {
-        prompt_created = section.trim();
-        console.log('Prompt criado encontrado');
+        // Extrair o conteúdo do bloco de código Markdown
+        const markdownCodeBlockMatch = section.match(/```markdown\s+([\s\S]*?)\s+```/);
+        
+        if (markdownCodeBlockMatch && markdownCodeBlockMatch[1]) {
+          // Se encontrou o bloco de código, use apenas o conteúdo dentro dele
+          prompt_created = markdownCodeBlockMatch[1].trim();
+          console.log('Prompt criado extraído do bloco Markdown');
+        } else {
+          // Caso não encontre o bloco de código, use a seção inteira
+          prompt_created = section.trim();
+          console.log('Prompt criado encontrado (sem bloco Markdown)');
+        }
       } else if (section.includes('### Parte do prompt que foi removida do prompt original:') ||
                 section.includes('## ### Parte do prompt que foi removida do prompt original:')) {
-        prompt_removed = section.trim();
-        console.log('Prompt removido encontrado');
+        // Extrair o conteúdo do bloco de código Markdown
+        const markdownCodeBlockMatch = section.match(/```markdown\s+([\s\S]*?)\s+```/);
+        
+        if (markdownCodeBlockMatch && markdownCodeBlockMatch[1]) {
+          // Se encontrou o bloco de código, use apenas o conteúdo dentro dele
+          prompt_removed = markdownCodeBlockMatch[1].trim();
+          console.log('Prompt removido extraído do bloco Markdown');
+        } else {
+          // Caso não encontre o bloco de código, use a seção inteira
+          prompt_removed = section.trim();
+          console.log('Prompt removido encontrado (sem bloco Markdown)');
+        }
       } else if (section.includes('### Prompt completo atualizado com a correção:') ||
                 section.includes('## ### Prompt completo atualizado com a correção:')) {
-        prompt_complete = section.trim();
-        console.log('Prompt completo encontrado');
+        // Extrair o conteúdo do bloco de código Markdown
+        const markdownCodeBlockMatch = section.match(/```markdown\s+([\s\S]*?)\s+```/);
+        
+        if (markdownCodeBlockMatch && markdownCodeBlockMatch[1]) {
+          // Se encontrou o bloco de código, use apenas o conteúdo dentro dele
+          prompt_complete = markdownCodeBlockMatch[1].trim();
+          console.log('Prompt completo extraído do bloco Markdown');
+        } else {
+          // Caso não encontre o bloco de código, use a seção inteira
+          prompt_complete = section.trim();
+          console.log('Prompt completo encontrado (sem bloco Markdown)');
+        }
       } else if (section.includes('## Checklist de Qualidade')) {
         const checklistLines = section.split('\n')
           .filter(line => line.includes('- [x]'))
