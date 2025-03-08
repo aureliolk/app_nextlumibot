@@ -1,6 +1,7 @@
 import { format } from 'date-fns'
 
 interface PromptHistoryItem {
+  instruction: string | undefined
   id: string
   account_id: string
   prompt: string
@@ -27,6 +28,24 @@ const PromptHistory = ({
   onRestore,
   onSetCurrent
 }: PromptHistoryProps) => {
+  
+  // Função para formatar o texto do prompt para exibição
+  const formatPromptText = (text?: string): string => {
+    if (!text) return '';
+    
+    // Remove caracteres de nova linha extras
+    const cleanText = text.replace(/\n+/g, ' ').trim();
+    
+    // Trunca o texto se for muito longo
+    const maxLength = 50;
+    if (cleanText.length <= maxLength) return cleanText;
+
+    
+    // Retorna o texto truncado com ...
+    return cleanText.substring(0, maxLength) + '...';
+  };
+
+
   return (
     <div className="mb-6 bg-gray-700 rounded-lg overflow-hidden">
       <div className="p-3 bg-gray-600 border-b border-gray-500">
@@ -40,7 +59,11 @@ const PromptHistory = ({
             {prompts.map((item) => (
               <li
                 key={item.id}
-                className={`p-3 hover:bg-gray-600 transition-colors ${currentPromptId === item.id ? 'bg-gray-650 border-l-4 border-orange-500' : ''}`}
+                className={`p-3 hover:bg-gray-600 transition-colors ${
+                  currentPromptId === item.id 
+                    ? 'bg-gray-650 border-l-4 border-orange-500' 
+                    : 'border-l-4 border-transparent'
+                }`}
               >
                 <div className="flex justify-between items-start">
                   <button
@@ -49,8 +72,7 @@ const PromptHistory = ({
                   >
                     <div>
                       <p className="text-xs font-medium text-white line-clamp-2">
-                        {item.prompt?.substring(0, 150)}
-                        {item.prompt?.length > 150 ? '...' : ''}
+                        {formatPromptText(item.instruction)}
                       </p>
                       {currentPromptId === item.id && (
                         <span className="text-xs text-orange-400 mt-1">Prompt atual</span>
@@ -64,8 +86,8 @@ const PromptHistory = ({
                     <button
                       onClick={() => onSetCurrent(item.id)}
                       disabled={isSettingCurrent || currentPromptId === item.id}
-                      className={`text-xs px-2 py-0.5 rounded ${currentPromptId === item.id
-                        ? 'bg-orange-600 text-white cursor-default'
+                      className={`text-xs px-2 py-0.5 rounded flex items-center ${currentPromptId === item.id
+                        ? 'bg-orange-600 text-white cursor-default font-medium'
                         : 'bg-gray-500 hover:bg-orange-600 text-white'
                       }`}
                       title={currentPromptId === item.id ? 'Este é o prompt atual' : 'Definir como prompt atual'}
@@ -79,7 +101,12 @@ const PromptHistory = ({
                           <span>Definindo...</span>
                         </span>
                       ) : currentPromptId === item.id ? (
-                        'Atual'
+                        <>
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                          </svg>
+                          <span>Atual</span>
+                        </>
                       ) : (
                         'Definir como atual'
                       )}

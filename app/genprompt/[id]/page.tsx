@@ -37,40 +37,69 @@ function GenPrompt() {
   const [isSettingCurrent, setIsSettingCurrent] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Monitorar mudanças no histórico de prompts
+  useEffect(() => {
+    // console.log("PromptHistory atualizado:", promptHistory);
+  }, [promptHistory]);
+  
   // Carregar dados iniciais
   useEffect(() => {
     if (promptParam && promptParam.id.length > 0) {
-      fetchPromptData()
+      // console.log('Carregando dados iniciais para o promptParam:', promptParam);
+      fetchPromptData();
     }
-  }, [promptParam])
+  }, [promptParam]);
 
   // Buscar dados do prompt e histórico
   const fetchPromptData = async () => {
     try {
-      // Buscar o histórico de prompts
-      const historyResponse = await fetch(`/api/prompts?accountId=${promptParam.id}`)
+      // Buscar o histórico de prompts com um timestamp para evitar cache
+      const timestamp = new Date().getTime();
+      // console.log("Buscando histórico de prompts");
+      
+      const historyResponse = await fetch(`/api/prompts?accountId=${promptParam.id}&_t=${timestamp}`, {
+        // Adicionar cabeçalhos para evitar cache
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
 
       if (historyResponse.ok) {
-        const promptsData = await historyResponse.json()
-        console.log(promptsData)
-        setPromptHistory(promptsData)
+        const promptsData = await historyResponse.json();
+        // console.log("Dados recebidos do servidor:", promptsData);
+        
+        // Importante: use os dados diretamente, não confie em promptHistory aqui
+        setPromptHistory(promptsData);
+        
+        // O console.log abaixo NÃO mostrará o estado atualizado devido à natureza assíncrona do setState
+        // console.log("Estado atual (ainda não atualizado):", promptHistory);
       } else {
-        console.error('Erro ao buscar dados dos prompts:', await historyResponse.text())
+        console.error('Erro ao buscar dados dos prompts:', await historyResponse.text());
       }
 
       // Buscar o prompt atual
-      const currentPromptResponse = await fetch(`/api/prompts/current?accountId=${promptParam.id}`)
+      // console.log("Buscando prompt atual");
+      const currentPromptResponse = await fetch(`/api/prompts/current?accountId=${promptParam.id}&_t=${timestamp}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
 
       if (currentPromptResponse.ok) {
-        const currentPromptData = await currentPromptResponse.json()
-        setCurrentPromptId(currentPromptData.id)
-        setResponse(currentPromptData.prompt_complete || currentPromptData.prompt)
+        const currentPromptData = await currentPromptResponse.json();
+        // console.log("Prompt atual recebido:", currentPromptData);
+        setCurrentPromptId(currentPromptData.id);
+        setResponse(currentPromptData.prompt_complete || currentPromptData.prompt);
       } else if (currentPromptResponse.status !== 404) {
         // Ignora 404 (não encontrado) porque é um caso válido
-        console.error('Erro ao buscar prompt atual:', await currentPromptResponse.text())
+        console.error('Erro ao buscar prompt atual:', await currentPromptResponse.text());
       }
     } catch (error) {
-      console.error('Erro ao buscar dados dos prompts:', error)
+      console.error('Erro ao buscar dados dos prompts:', error);
     }
   }
 
@@ -84,6 +113,7 @@ function GenPrompt() {
     try {
       setIsLoading(true)
       setResponse('')
+      console.log("Enviando prompt:", text.substring(0, 50));
 
       // Primeiro obtemos a resposta da API externa
       const externalResponse = await fetch('https://webhookn8n.lumibot.com.br/webhook/create/prompt', {
@@ -104,12 +134,24 @@ function GenPrompt() {
 
       const apiResponseText = await externalResponse.json()
       setResponse(apiResponseText)
+      console.log("Resposta recebida do servidor");
 
       // Salvar o prompt no banco de dados
-      await savePromptToDatabase(text, apiResponseText)
+      console.log("Salvando prompt no banco de dados");
+      const savedPrompt = await savePromptToDatabase(text, apiResponseText)
+      console.log("Prompt salvo:", savedPrompt);
       
-      // Atualizar o histórico
-      await fetchPromptData()
+      // Forçar a atualização do histórico de prompts após um pequeno atraso
+      console.log("Atualizando histórico após salvar");
+      setTimeout(async () => {
+        await fetchPromptData();
+        
+        // Se o prompt foi salvo com sucesso, definir como atual
+        if (savedPrompt && savedPrompt.id) {
+          console.log("Definindo prompt como atual:", savedPrompt.id);
+          await setPromptAsCurrent(savedPrompt.id);
+        }
+      }, 500); // Atraso de 500ms para garantir que o banco de dados foi atualizado
     } catch (error) {
       console.error('Error:', error)
       setError(error instanceof Error ? error.message : 'Failed to get response from server')
@@ -135,11 +177,15 @@ function GenPrompt() {
 
       if (!saveResponse.ok) {
         console.error('Erro ao salvar prompt no banco de dados:', await saveResponse.text())
+        return null
       } else {
         console.log('Prompt salvo com sucesso no banco de dados')
+        const savedData = await saveResponse.json()
+        return savedData
       }
     } catch (error) {
       console.error('Erro ao salvar prompt:', error)
+      return null
     }
   }
 
@@ -153,6 +199,7 @@ function GenPrompt() {
     try {
       setIsLoading(true)
       setResponse('')
+      console.log("Processando arquivo de áudio:", file.name);
 
       // Converter qualquer formato de áudio para mp3
       let finalFile = file;
@@ -160,6 +207,7 @@ function GenPrompt() {
       // Verificar se o arquivo já é MP3
       if (!file.type.includes('mp3') && !file.type.includes('mpeg')) {
         try {
+          console.log("Convertendo arquivo para MP3");
           const fileBlob = file.slice(0, file.size, file.type);
           const mp3Blob = await convertWebmToMp3(fileBlob);
           
@@ -170,6 +218,7 @@ function GenPrompt() {
             type: 'audio/mpeg',
             lastModified: new Date().getTime()
           });
+          console.log("Arquivo convertido:", finalFile.name);
         } catch (conversionError) {
           console.error('Erro na conversão do áudio:', conversionError);
         }
@@ -184,6 +233,7 @@ function GenPrompt() {
         formData.append('account_id', promptParam.id)
       }
 
+      console.log("Enviando áudio para processamento");
       const response = await fetch('https://webhookn8n.lumibot.com.br/webhook/create/prompt', {
         method: 'POST',
         body: formData
@@ -194,6 +244,7 @@ function GenPrompt() {
       }
 
       const data = await response.json()
+      console.log("Resposta recebida do servidor de áudio");
       
       if (!data || !data[0] || !data[0].text) {
         throw new Error('Formato de resposta inválido da API de áudio')
@@ -208,11 +259,23 @@ function GenPrompt() {
 
       setResponse(apiResponseText)
 
-      // Salvar o prompt no banco de dados
-      await savePromptToDatabase(`Áudio: ${finalFile.name}`, apiResponseText)
+      // Salvar o prompt no banco de dados com um nome mais descritivo
+      const promptText = `Áudio: ${finalFile.name.length > 20 ? finalFile.name.substring(0, 20) + '...' : finalFile.name}`;
+      console.log("Salvando prompt de áudio:", promptText);
+      const savedPrompt = await savePromptToDatabase(promptText, apiResponseText)
+      console.log("Prompt de áudio salvo:", savedPrompt);
       
-      // Atualizar o histórico
-      await fetchPromptData()
+      // Forçar a atualização do histórico de prompts após um pequeno atraso
+      console.log("Atualizando histórico após salvar áudio");
+      setTimeout(async () => {
+        await fetchPromptData();
+        
+        // Se o prompt foi salvo com sucesso, definir como atual
+        if (savedPrompt && savedPrompt.id) {
+          console.log("Definindo prompt de áudio como atual:", savedPrompt.id);
+          await setPromptAsCurrent(savedPrompt.id);
+        }
+      }, 500);
 
       // Limpar o arquivo após envio bem-sucedido
       setAudioFile(null)
