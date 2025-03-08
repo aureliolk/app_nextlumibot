@@ -1,6 +1,6 @@
 // app/api/prompts/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getPromptsByAccountId, savePrompt, processApiResponse } from '@/app/genprompt/_services/api';
+import { getPromptsByAccountId, savePrompt } from '@/app/genprompt/_services/api';
 
 // GET route para obter todos os prompts de uma conta
 export async function GET(request: NextRequest) {
@@ -31,44 +31,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { text, promptParam, apiResponse } = body;
     
-    console.log('Recebido para salvar:', { text, promptParam, apiResponse: apiResponse?.substring(0, 100) + '...' });
-    
-    if (!text || !promptParam) {
-      console.error('Erro de validação: Texto do prompt ou ID da conta ausente');
-      return NextResponse.json(
-        { error: 'Texto do prompt e ID da conta são obrigatórios' },
-        { status: 400 }
-      );
-    }
+    console.log('Recebido para salvar:', { text, promptParam, apiResponse });
     
     // Se temos uma resposta da API, processamos e salvamos
     if (apiResponse) {
       console.log('Processando resposta da API');
-      const {
-        analysis,
-        prompt_created,
-        prompt_removed,
-        prompt_complete,
-        quality_checks
-      } = processApiResponse(apiResponse);
-      
-      console.log('Dados processados:', { 
-        hasAnalysis: !!analysis, 
-        hasPromptCreated: !!prompt_created,
-        hasPromptRemoved: !!prompt_removed,
-        hasPromptComplete: !!prompt_complete,
-        numQualityChecks: quality_checks?.length || 0
-      });
       
       // Salvar no banco de dados
       const savedPrompt = await savePrompt({
         account_id: promptParam,
-        prompt: text,
-        analysis,
-        prompt_created,
-        prompt_removed,
-        prompt_complete,
-        quality_checks
+        instruction: text,
+        prompt_created: apiResponse[0].content,
+        prompt_removed: apiResponse[1].content,
+        prompt_complete: apiResponse[2].content
       });
       
       console.log('Prompt salvo com sucesso:', savedPrompt?.id);
@@ -79,7 +54,7 @@ export async function POST(request: NextRequest) {
     console.log('Salvando prompt sem resposta da API');
     const savedPrompt = await savePrompt({
       account_id: promptParam,
-      prompt: text
+      instruction: text
     });
     
     console.log('Prompt básico salvo com sucesso:', savedPrompt?.id);

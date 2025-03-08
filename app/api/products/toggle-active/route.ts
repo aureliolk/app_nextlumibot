@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma from '../../../products/_lib/db'; // Importa o cliente Prisma
+import prisma from '../../../../lib/db'; // Importa o cliente Prisma
 
 export async function PATCH(req: Request) {
   try {

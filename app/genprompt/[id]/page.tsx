@@ -159,18 +159,9 @@ function GenPrompt() {
       const externalData = await externalResponse.json()
       console.log('Resposta da API externa:', externalData)
 
-      // Verificar se a resposta tem o formato esperado
-      if (!externalData || !externalData[0] || !externalData[0].response) {
-        throw new Error('Formato de resposta inválido da API externa')
-      }
 
       // Processar a resposta
-      const apiResponseText = externalData[0].response
-        .replace(/\\n/g, '\n')          // Converter \n literal em quebras de linha reais
-        .replace(/\\\"/g, '"')          // Converter \" em "
-        .replace(/\\/g, '')             // Remover barras invertidas extras
-        .replace(/\n\n+/g, '\n\n')      // Normalizar múltiplas quebras de linha
-        .trim()                         // Remover espaços em branco extras
+      const apiResponseText = externalData
 
       setResponse(apiResponseText)
 
@@ -215,6 +206,7 @@ function GenPrompt() {
   }
 
   useEffect(() => {
+    
     console.log('useEffect executado')
 
     if (promptParam && promptParam.id.length > 0) {
@@ -967,21 +959,9 @@ function GenPrompt() {
                   <div className="prose prose-invert prose-pre:bg-gray-800 prose-pre:text-gray-100 max-w-none">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm, remarkBreaks]}
-                      components={{
-                        p: ({ children, ...props }: ComponentPropsWithoutRef<'p'>) => (
-                          <p className="mb-4 text-sm font-extralight whitespace-pre-line" {...props}>{children}</p>
-                        ),
-                        pre: ({ children, ...props }: ComponentPropsWithoutRef<'pre'>) => (
-                          <pre className="p-4 rounded-lg text-sm font-extralight bg-gray-800 overflow-auto" {...props}>{children}</pre>
-                        ),
-                        code: ({ children, className, ...props }: ComponentPropsWithoutRef<'code'> & { inline?: boolean }) => (
-                          props.inline
-                            ? <code className="bg-gray-800 text-sm font-extralight px-1 py-0.5 rounded">{children}</code>
-                            : <code className="block" {...props}>{children}</code>
-                        ),
-                      }}
+                      components={{}}
                     >
-                      {response}
+                      {typeof response === 'string' ? response : JSON.stringify(response)}
                     </ReactMarkdown>
                   </div>
                 ) : (

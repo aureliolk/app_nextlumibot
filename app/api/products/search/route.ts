@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import prisma, { normalizeSearchText } from '../../../products/_lib/db';
+import prisma, { normalizeSearchText } from '../../../../lib/db';
 
 export async function GET(req: Request) {
   try {

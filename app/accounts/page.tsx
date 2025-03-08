@@ -50,7 +50,7 @@ export default function AccountsPage() {
     try {
       const response = await axios.get("https://webhookn8n.lumibot.com.br/webhook/accounts/list");
       if (response.data) {
-        console.log(response.data[4].custom_attributes[1].bot)
+       
         setAccounts(response.data);
       }
     } catch (err) {

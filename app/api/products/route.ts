@@ -1,6 +1,6 @@
 // app/api/products/route.ts
 import { NextResponse } from 'next/server';
-import prisma from '../../products/_lib/db'; // Ajuste o caminho
+import prisma from '../../../lib/db';
 import { ProductVariation } from '@/app/products/_services/api';
 
 export async function GET(req: Request) {
