@@ -33,11 +33,21 @@ model Prompt {
   account_id      String    
   instruction     String    
   created_at      DateTime  @default(now())
-  prompt_created  String?   @db.Text   
-  prompt_removed  String?   @db.Text   
-  prompt_complete String?   @db.Text   
   is_current      Boolean?  @default(false)
+  promptContent   PromptContent?
   
   @@map("prompts")
-  @@schema("prompts_schema") // Adicione isso para especificar o schema PostgreSQL
+  @@schema("prompts_schema")
+}
+
+model PromptContent {
+  id              String    @id @default(uuid())
+  prompt_id       String    @unique
+  prompt          Prompt    @relation(fields: [prompt_id], references: [id])
+  prompt_created  String?   @db.Text   
+  prompt_removed  String?   @db.Text   
+  prompt_complete String?   @db.Text
+  
+  @@map("prompt_contents")
+  @@schema("prompts_schema")
 }
