@@ -1,6 +1,6 @@
 // app/api/prompts/restore/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getPromptById } from '@/app/genprompt/_lib/db';
+import { getPromptById } from '@/app/genprompt/_services/api';
 
 // POST route para restaurar um prompt
 export async function POST(request: NextRequest) {

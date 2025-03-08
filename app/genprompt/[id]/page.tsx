@@ -1,3 +1,4 @@
+//app/genprompt/[id]/page.ts
 'use client'
 
 import { useState, FormEvent, useEffect, useRef } from 'react'
@@ -21,60 +22,60 @@ const convertWebmToMp3 = async (webmBlob: Blob): Promise<Blob> => {
     try {
       // Criar URL para o blob
       const audioURL = URL.createObjectURL(webmBlob);
-      
+
       // Criar elemento de áudio
       const audio = new Audio();
       audio.src = audioURL;
-      
+
       // Criar contexto de áudio
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       const audioContext = new AudioContext();
-      
+
       // Criar source node
       const source = audioContext.createMediaElementSource(audio);
-      
+
       // Criar destination para gravar o áudio processado
       const destination = audioContext.createMediaStreamDestination();
-      
+
       // Conectar source ao destination
       source.connect(destination);
-      
+
       // Criar MediaRecorder para o destination
       const mediaRecorder = new MediaRecorder(destination.stream, {
         mimeType: 'audio/webm'
       });
-      
+
       const chunks: Blob[] = [];
-      
+
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunks.push(e.data);
         }
       };
-      
+
       mediaRecorder.onstop = () => {
         // Criar blob com os novos chunks
         const newBlob = new Blob(chunks, { type: 'audio/mpeg' });
         resolve(newBlob);
-        
+
         // Limpar URL
         URL.revokeObjectURL(audioURL);
       };
-      
+
       // Iniciar gravação
       mediaRecorder.start();
-      
+
       // Reproduzir áudio
       audio.oncanplaythrough = () => {
         audio.play();
       };
-      
+
       // Quando o áudio terminar, parar a gravação
       audio.onended = () => {
         mediaRecorder.stop();
         audioContext.close();
       };
-      
+
     } catch (error) {
       console.error('Erro ao converter áudio:', error);
       // Retornar o blob original em caso de erro
@@ -101,7 +102,7 @@ function GenPrompt() {
   // Componente principal com o conteúdo original
 
   const promptParam = useParams<{ id: any; }>()
-  
+
   const [prompt, setPrompt] = useState('')
   const [response, setResponse] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -122,6 +123,8 @@ function GenPrompt() {
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const visualizerIntervalRef = useRef<number | null>(null)
+  const [currentPromptId, setCurrentPromptId] = useState<string | null>(null);
+  const [isSettingCurrent, setIsSettingCurrent] = useState(false);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -142,8 +145,8 @@ function GenPrompt() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          text: prompt, 
+        body: JSON.stringify({
+          text: prompt,
           promptParam: promptParam.id,
           inputType: 'text' // Identificador do tipo de entrada
         })
@@ -155,12 +158,12 @@ function GenPrompt() {
 
       const externalData = await externalResponse.json()
       console.log('Resposta da API externa:', externalData)
-      
+
       // Verificar se a resposta tem o formato esperado
       if (!externalData || !externalData[0] || !externalData[0].response) {
         throw new Error('Formato de resposta inválido da API externa')
       }
-      
+
       // Processar a resposta
       const apiResponseText = externalData[0].response
         .replace(/\\n/g, '\n')          // Converter \n literal em quebras de linha reais
@@ -170,7 +173,7 @@ function GenPrompt() {
         .trim()                         // Remover espaços em branco extras
 
       setResponse(apiResponseText)
-      
+
       // Salvar o prompt no nosso banco de dados
       const saveResponse = await fetch('/api/prompts', {
         method: 'POST',
@@ -183,7 +186,7 @@ function GenPrompt() {
           apiResponse: apiResponseText
         })
       })
-      
+
       if (!saveResponse.ok) {
         console.error('Erro ao salvar prompt no banco de dados:', await saveResponse.text())
       } else {
@@ -191,10 +194,10 @@ function GenPrompt() {
         const savedData = await saveResponse.json()
         console.log('Dados salvos:', savedData)
       }
-      
+
       // Buscar o histórico atualizado de prompts
       const historyResponse = await fetch(`/api/prompts?accountId=${promptParam.id}`)
-      
+
       if (historyResponse.ok) {
         const promptsData = await historyResponse.json()
         console.log('Histórico de prompts atualizado:', promptsData)
@@ -213,51 +216,100 @@ function GenPrompt() {
 
   useEffect(() => {
     console.log('useEffect executado')
-    
+
     if (promptParam && promptParam.id.length > 0) {
       console.log('Fazendo requisição com o prompt:', promptParam)
-      
-      // Buscar o histórico de prompts do nosso banco de dados
+
+      // Buscar o histórico de prompts e o prompt atual
       const fetchPromptData = async () => {
         try {
           // Buscar o histórico de prompts
           const historyResponse = await fetch(`/api/prompts?accountId=${promptParam.id}`)
-          
+
           if (historyResponse.ok) {
             const promptsData = await historyResponse.json()
-            
-            // Atualizar o histórico
             setPromptHistory(promptsData)
-            
-            // Se existir algum prompt, mostrar o mais recente na área de resposta
-            if (promptsData && promptsData.length > 0) {
-              const latestPrompt = promptsData[0] // Como ordenamos por data decrescente, o primeiro é o mais recente
-              // Verifica se temos o prompt_complete, caso contrário usa o prompt original
-              setResponse(latestPrompt.prompt_complete || latestPrompt.prompt)
-            }
           } else {
             console.error('Erro ao buscar dados dos prompts:', await historyResponse.text())
           }
+
+          // Buscar o prompt atual
+          const currentPromptResponse = await fetch(`/api/prompts/current?accountId=${promptParam.id}`)
+
+          if (currentPromptResponse.ok) {
+            const currentPromptData = await currentPromptResponse.json()
+
+            // Definir qual é o prompt atual
+            setCurrentPromptId(currentPromptData.id)
+
+            // Exibir o prompt atual na área de resposta
+            setResponse(currentPromptData.prompt_complete || currentPromptData.prompt)
+          } else if (currentPromptResponse.status !== 404) {
+            // Ignora 404 (não encontrado) porque é um caso válido
+            console.error('Erro ao buscar prompt atual:', await currentPromptResponse.text())
+          }
         } catch (error) {
           console.error('Erro ao buscar dados dos prompts:', error)
-          }
+        }
       }
-      
+
       // Executar a busca de dados
       fetchPromptData()
     }
-  }, [promptParam]) 
+  }, [promptParam])
+
+  // Adicione esta nova função para definir um prompt como atual
+  const setPromptAsCurrent = async (promptId: string) => {
+    try {
+      setIsSettingCurrent(true)
+
+      const response = await fetch('/api/prompts/current', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          accountId: promptParam.id,
+          promptId
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Atualizar o ID do prompt atual
+        setCurrentPromptId(promptId)
+
+        // Atualizar a resposta com o prompt atual
+        setResponse(data.prompt.prompt_complete || data.prompt.prompt)
+
+        // Opcional: Fechar o histórico após selecionar
+        // setShowPromptHistory(false)
+      } else {
+        throw new Error('Falha ao definir o prompt atual')
+      }
+    } catch (error) {
+      console.error('Erro ao definir prompt atual:', error)
+      setError(error instanceof Error ? error.message : 'Falha ao definir o prompt atual')
+    } finally {
+      setIsSettingCurrent(false)
+    }
+  }
 
   // Função para lidar com o upload de arquivo de áudio
   const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (files && files.length > 0) {
       const file = files[0]
-      
+
       // Lista de extensões válidas de áudio
       const validExtensions = ['.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm', '.ogg', '.oga', '.flac']
       const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase()
-      
+
       // Verifica se é um arquivo de áudio pelo MIME type ou pela extensão
       if (file.type.startsWith('audio/') || validExtensions.some(ext => fileExtension === ext)) {
         console.log(`Arquivo de áudio selecionado: ${file.name} (${file.size} bytes, tipo: ${file.type})`)
@@ -286,12 +338,12 @@ function GenPrompt() {
 
       // Converter qualquer formato de áudio para mp3
       let finalFile = file;
-      
+
       // Tentar converter qualquer formato de áudio para MP3 para maior compatibilidade
       try {
         // Pegamos a extensão do arquivo para determinar o tipo
         const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-        
+
         // Se já for MP3, não precisa converter
         if (file.type.includes('mp3') || file.type.includes('mpeg') || fileExtension === '.mp3') {
           console.log('Arquivo já está em formato MP3, pulando conversão');
@@ -300,21 +352,21 @@ function GenPrompt() {
           // Caso contrário, tentamos converter
           setConversionProgress(`Convertendo ${fileExtension} para MP3...`);
           console.log(`Iniciando conversão de ${file.name} (${file.size} bytes, ${file.type})`);
-          
+
           // Converter o arquivo para mp3
           const fileBlob = file.slice(0, file.size, file.type);
           const mp3Blob = await convertWebmToMp3(fileBlob);
-          
+
           // Criar novo nome com extensão .mp3
           const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.'));
           const fileName = `${fileNameWithoutExt}.mp3`;
-          
+
           // Criar novo arquivo MP3
-          finalFile = new File([mp3Blob], fileName, { 
+          finalFile = new File([mp3Blob], fileName, {
             type: 'audio/mpeg',
             lastModified: new Date().getTime()
           });
-          
+
           console.log(`Conversão concluída: ${finalFile.name} (${finalFile.size} bytes, ${finalFile.type})`);
           setConversionProgress('Conversão concluída!');
         }
@@ -325,12 +377,12 @@ function GenPrompt() {
 
       setIsConverting(false)
       setConversionProgress('')
-      
+
       // Criar FormData para enviar o arquivo
       const formData = new FormData()
       formData.append('audio', finalFile)
       formData.append('inputType', 'audio') // Identificador para o backend saber que é um áudio
-      
+
       if (promptParam) {
         formData.append('account_id', promptParam.id)
       }
@@ -347,12 +399,12 @@ function GenPrompt() {
 
       const data = await response.json()
       console.log('Resposta da API de upload de áudio:', data)
-      
+
       // Verifica se a resposta tem o formato esperado
       if (!data || !data[0] || !data[0].text) {
         throw new Error('Formato de resposta inválido da API de áudio')
       }
-      
+
       // Processa a resposta da mesma forma que o texto
       const apiResponseText = data[0].text
         .replace(/\\n/g, '\n')
@@ -360,9 +412,9 @@ function GenPrompt() {
         .replace(/\\/g, '')
         .replace(/\n\n+/g, '\n\n')
         .trim()
-      
+
       setResponse(apiResponseText)
-      
+
       // Salvar o prompt no nosso banco de dados
       try {
         console.log('Salvando resultado do upload de áudio no banco de dados')
@@ -377,7 +429,7 @@ function GenPrompt() {
             apiResponse: apiResponseText
           })
         })
-        
+
         if (!saveResponse.ok) {
           console.error('Erro ao salvar prompt do áudio no banco de dados:', await saveResponse.text())
         } else {
@@ -385,10 +437,10 @@ function GenPrompt() {
           const savedData = await saveResponse.json()
           console.log('Dados do áudio salvos:', savedData)
         }
-        
+
         // Buscar o histórico atualizado de prompts
         const historyResponse = await fetch(`/api/prompts?accountId=${promptParam.id}`)
-        
+
         if (historyResponse.ok) {
           const promptsData = await historyResponse.json()
           console.log('Histórico de prompts atualizado após áudio:', promptsData)
@@ -399,13 +451,13 @@ function GenPrompt() {
       } catch (dbError) {
         console.error('Erro ao interagir com o banco de dados:', dbError)
       }
-      
+
       // Limpar o arquivo após envio bem-sucedido
       setAudioFile(null)
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
-      
+
       // Voltar para o estado inicial da interface
       setIsAudioMode(false)
     } catch (error) {
@@ -416,7 +468,7 @@ function GenPrompt() {
       setIsLoading(false)
     }
   }
-  
+
   // Função para lidar com o envio manual de áudio
   // const handleAudioSubmit = () => {
   //   if (audioFile) {
@@ -425,31 +477,31 @@ function GenPrompt() {
   //     setError('Por favor, selecione um arquivo de áudio')
   //   }
   // }
-  
+
   // Função para deletar o áudio gravado
   const deleteAudio = () => {
     setAudioFile(null)
     setIsAudioMode(false)
-    
+
     // Limpar o input de arquivo, se existir
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
-    
+
     // Garantir que o visualizador de áudio está parado
     stopAudioVisualizer()
   }
-  
+
   // Função para parar o visualizador de áudio
   const stopAudioVisualizer = () => {
     if (visualizerIntervalRef.current) {
       window.clearInterval(visualizerIntervalRef.current)
       visualizerIntervalRef.current = null
     }
-    
+
     // Limpar os dados do visualizador
     setAudioVisualizerData([])
-    
+
     // Fechar contexto de áudio se existir
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       audioContextRef.current.close().catch(console.error)
@@ -462,34 +514,34 @@ function GenPrompt() {
       stopRecording()
       return
     }
-    
+
     // Entrar no modo áudio
     setIsAudioMode(true)
 
     try {
       // Solicitar permissão para acessar o microfone
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      
+
       // Configurar visualizador de áudio
       try {
         // Criar contexto de áudio
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext
         audioContextRef.current = new AudioContext()
-        
+
         // Criar fonte de áudio a partir do stream
         const source = audioContextRef.current.createMediaStreamSource(stream)
-        
+
         // Criar analisador
         analyserRef.current = audioContextRef.current.createAnalyser()
         analyserRef.current.fftSize = 256
-        
+
         // Conectar fonte ao analisador
         source.connect(analyserRef.current)
-        
+
         // Configurar intervalo para ler dados do analisador
         const bufferLength = analyserRef.current.frequencyBinCount
         const dataArray = new Uint8Array(bufferLength)
-        
+
         visualizerIntervalRef.current = window.setInterval(() => {
           if (analyserRef.current) {
             analyserRef.current.getByteFrequencyData(dataArray)
@@ -502,89 +554,89 @@ function GenPrompt() {
       } catch (visualizerError) {
         console.error('Erro ao configurar visualizador de áudio:', visualizerError)
       }
-      
+
       // Criar novo MediaRecorder
       const mediaRecorder = new MediaRecorder(stream)
       mediaRecorderRef.current = mediaRecorder
       audioChunksRef.current = []
-      
+
       // Evento para capturar os chunks de áudio
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data)
         }
       }
-      
+
       // Evento quando a gravação termina
       mediaRecorder.onstop = async () => {
         // Criar um Blob com todos os chunks usando webm (formato nativo do navegador)
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' })
-        
+
         // Definir um nome de arquivo com timestamp
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
         const fileName = `instrucao_audio_${timestamp}.webm`
-        
+
         // Criar um File a partir do Blob
         const audioFile = new File([audioBlob], fileName, { type: 'audio/webm' })
-        
+
         // Atualizar o estado
         setAudioFile(audioFile)
         setIsRecording(false)
         setIsAudioMode(true) // Manter no modo áudio para exibir opções de gerenciamento
-        
+
         // Parar o timer
         if (timerRef.current) {
           window.clearInterval(timerRef.current)
           timerRef.current = null
         }
-        
+
         // Parar todas as faixas do stream
         stream.getTracks().forEach(track => track.stop())
-        
+
         // Não enviar automaticamente, deixar o usuário decidir
         // await handleAudioUpload(audioFile)
       }
-      
+
       // Iniciar a gravação
       mediaRecorder.start(200) // Coleta chunks a cada 200ms
       setIsRecording(true)
       setRecordingTime(0)
-      
+
       // Iniciar o timer para mostrar o tempo de gravação
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prev => prev + 1)
       }, 1000)
-      
+
       // Definir um tempo máximo de gravação (30 segundos)
       setTimeout(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
           stopRecording()
         }
       }, 30000) // 30 segundos
-      
+
     } catch (error) {
       console.error('Erro ao acessar o microfone:', error)
       setError('Não foi possível acessar o microfone. Verifique as permissões do navegador.')
     }
   }
-  
+
   // Função para parar a gravação
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop()
     }
-    
+
     // Parar o visualizador de áudio
     stopAudioVisualizer()
   }
-  
+
   // Função para formatar o tempo de gravação
   const formatRecordingTime = () => {
     const minutes = Math.floor(recordingTime / 60)
     const seconds = recordingTime % 60
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
   }
-  
+
   // Função para abrir o seletor de arquivo (para upload manual)
   const triggerFileInput = () => {
     setIsAudioMode(true) // Ativar o modo áudio para arquivos também
@@ -592,13 +644,13 @@ function GenPrompt() {
       fileInputRef.current.click()
     }
   }
-  
+
   // Função para restaurar um prompt
   const restorePrompt = async (promptId: string) => {
     try {
       setIsLoading(true)
       setError('')
-      
+
       // Fazer a requisição para nossa API interna
       const response = await fetch('/api/prompts/restore', {
         method: 'POST',
@@ -607,13 +659,13 @@ function GenPrompt() {
         },
         body: JSON.stringify({ promptId })
       })
-      
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
       }
-      
+
       const data = await response.json()
-      
+
       // Atualizar a resposta com o prompt completo ou original
       if (data.success) {
         // Mostrar o prompt completo se existir, caso contrário o original
@@ -628,7 +680,7 @@ function GenPrompt() {
       setIsLoading(false)
     }
   }
-  
+
   // Função para alternar a exibição do histórico de prompts
   const togglePromptHistory = () => {
     setShowPromptHistory(!showPromptHistory)
@@ -642,7 +694,7 @@ function GenPrompt() {
             <h1 className="text-3xl font-semibold text-center mb-8 text-white">
               Gerador de Instrução
             </h1>
-            
+
             <form onSubmit={handleSubmit} className="space-y-6">
               {!isAudioMode && (
                 <div>
@@ -688,7 +740,7 @@ function GenPrompt() {
                         'Enviar Instrução'
                       )}
                     </button>
-                    
+
                     {/* Botão para gravação de áudio */}
                     <button
                       type="button"
@@ -701,7 +753,7 @@ function GenPrompt() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                       </svg>
                     </button>
-                    
+
                     {/* Botão para upload manual de áudio */}
                     <button
                       type="button"
@@ -716,7 +768,7 @@ function GenPrompt() {
                     </button>
                   </>
                 )}
-                
+
                 {/* Modo de gravação - exibe contador e botão para parar */}
                 {isAudioMode && isRecording && (
                   <>
@@ -725,7 +777,7 @@ function GenPrompt() {
                         <div className="animate-pulse mr-2 h-3 w-3 rounded-full bg-red-500"></div>
                         <span className="font-medium">Gravando: {formatRecordingTime()}</span>
                       </div>
-                      
+
                       {/* Visualizador de ondas de áudio */}
                       {audioVisualizerData.length > 0 && (
                         <div className="flex items-end h-10 w-full space-x-px mt-1">
@@ -733,7 +785,7 @@ function GenPrompt() {
                             <div
                               key={index}
                               className="w-1 bg-orange-500 rounded-t"
-                              style={{ 
+                              style={{
                                 height: `${Math.max(4, value * 40)}px`,
                                 opacity: 0.7 + value * 0.3
                               }}
@@ -742,7 +794,7 @@ function GenPrompt() {
                         </div>
                       )}
                     </div>
-                    
+
                     <button
                       type="button"
                       onClick={stopRecording}
@@ -755,9 +807,9 @@ function GenPrompt() {
                     </button>
                   </>
                 )}
-                
+
                 {/* Modo de áudio com arquivo pronto para envio */}
-                {isAudioMode && !isRecording && audioFile  && (
+                {isAudioMode && !isRecording && audioFile && (
                   <>
                     <div className="flex-grow flex items-center justify-start py-3 px-4 rounded-lg text-white bg-gray-700">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -775,7 +827,7 @@ function GenPrompt() {
                         )}
                       </div>
                     </div>
-                    
+
                     {/* Botão para enviar áudio */}
                     <button
                       type="button"
@@ -795,7 +847,7 @@ function GenPrompt() {
                         </svg>
                       )}
                     </button>
-                    
+
                     {/* Botão para deletar áudio */}
                     <button
                       type="button"
@@ -810,9 +862,9 @@ function GenPrompt() {
                     </button>
                   </>
                 )}
-                
+
                 {/* Input oculto para seleção de arquivo */}
-                <input 
+                <input
                   type="file"
                   ref={fileInputRef}
                   onChange={handleAudioFileChange}
@@ -833,36 +885,67 @@ function GenPrompt() {
                   {showPromptHistory ? 'Esconder Histórico' : 'Mostrar Histórico'}
                 </button>
               </div>
-              
+
               {/* Histórico de prompts */}
               {showPromptHistory && (
                 <div className="mb-6 bg-gray-700 rounded-lg overflow-hidden">
                   <div className="p-3 bg-gray-600 border-b border-gray-500">
                     <h3 className="text-sm font-medium text-white">Histórico de Instruções</h3>
-                    <p className="text-xs text-gray-300 mt-1">Clique em uma instrução para restaurá-la</p>
+                    <p className="text-xs text-gray-300 mt-1">Clique para restaurar ou defina como atual</p>
                   </div>
-                  
+
                   <div className="max-h-64 overflow-y-auto">
                     {promptHistory.length > 0 ? (
                       <ul className="divide-y divide-gray-600">
                         {promptHistory.map((item) => (
-                          <li key={item.id} className="p-3 hover:bg-gray-600 transition-colors">
-                            <button
-                              onClick={() => restorePrompt(item.id)}
-                              className="w-full text-left"
-                            >
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1 pr-4">
+                          <li
+                            key={item.id}
+                            className={`p-3 hover:bg-gray-600 transition-colors ${currentPromptId === item.id ? 'bg-gray-650 border-l-4 border-orange-500' : ''}`}
+                          >
+                            <div className="flex justify-between items-start">
+                              <button
+                                onClick={() => restorePrompt(item.id)}
+                                className="flex-1 text-left pr-4"
+                              >
+                                <div>
                                   <p className="text-xs font-medium text-white line-clamp-2">
                                     {item.prompt?.substring(0, 150)}
                                     {item.prompt?.length > 150 ? '...' : ''}
                                   </p>
+                                  {currentPromptId === item.id && (
+                                    <span className="text-xs text-orange-400 mt-1">Prompt atual</span>
+                                  )}
                                 </div>
-                                <span className="text-xs text-gray-400 whitespace-nowrap">
+                              </button>
+                              <div className="flex flex-col items-end">
+                                <span className="text-xs text-gray-400 whitespace-nowrap mb-1">
                                   {item.created_at ? format(new Date(item.created_at), 'dd/MM/yy HH:mm') : '-'}
                                 </span>
+                                <button
+                                  onClick={() => setPromptAsCurrent(item.id)}
+                                  disabled={isSettingCurrent || currentPromptId === item.id}
+                                  className={`text-xs px-2 py-0.5 rounded ${currentPromptId === item.id
+                                      ? 'bg-orange-600 text-white cursor-default'
+                                      : 'bg-gray-500 hover:bg-orange-600 text-white'
+                                    }`}
+                                  title={currentPromptId === item.id ? 'Este é o prompt atual' : 'Definir como prompt atual'}
+                                >
+                                  {isSettingCurrent && currentPromptId !== item.id ? (
+                                    <span className="flex items-center">
+                                      <svg className="animate-spin h-3 w-3 mr-1" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                      </svg>
+                                      <span>Definindo...</span>
+                                    </span>
+                                  ) : currentPromptId === item.id ? (
+                                    'Atual'
+                                  ) : (
+                                    'Definir como atual'
+                                  )}
+                                </button>
                               </div>
-                            </button>
+                            </div>
                           </li>
                         ))}
                       </ul>
@@ -874,7 +957,7 @@ function GenPrompt() {
                   </div>
                 </div>
               )}
-              
+
               <div className="bg-gray-700 text-gray-300 text-sm font-extralight rounded-lg p-6 min-h-[200px] overflow-auto">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full">

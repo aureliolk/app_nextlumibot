@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useTransition } from "react";
 import axios from "axios";
+import Link from "next/link";
 
 interface Account {
   id: number;
@@ -49,6 +50,7 @@ export default function AccountsPage() {
     try {
       const response = await axios.get("https://webhookn8n.lumibot.com.br/webhook/accounts/list");
       if (response.data) {
+        console.log(response.data[4].custom_attributes[1].bot)
         setAccounts(response.data);
       }
     } catch (err) {
@@ -234,7 +236,8 @@ export default function AccountsPage() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Empresa</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bot</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bot-Token</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Url-Crm</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data Criação</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
@@ -251,10 +254,13 @@ export default function AccountsPage() {
                     {account.name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {account.custom_attributes?.botName || "-"}
+                    {account.custom_attributes[1]?.bot || "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {account.support_email || "-"}
+                    {account.custom_attributes[1]?.token || "-"}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <Link target="blank" href={account.custom_attributes[2]?.crm || "-"}>{account.custom_attributes[2]?.crm || "-"}</Link>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(account.created_at).toLocaleDateString()}

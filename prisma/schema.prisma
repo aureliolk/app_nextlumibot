@@ -1,0 +1,45 @@
+//prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["products_schema", "prompts_schema", "public"]
+}
+
+model Product {
+  id          Int       @id @default(autoincrement())
+  name        String
+  url         String
+  price       Float
+  description String?
+  brand       String?
+  gender      String?
+  image       String?
+  categories  Json
+  variations  Json
+  active      Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  
+  @@map("products")
+  @@schema("products_schema") // Adicione isso para especificar o schema PostgreSQL
+}
+
+model Prompt {
+  id              String    @id @default(uuid())
+  account_id      String    
+  prompt          String    
+  created_at      DateTime  @default(now())
+  analysis        String?   @db.Text   
+  prompt_created  String?   @db.Text   
+  prompt_removed  String?   @db.Text   
+  prompt_complete String?   @db.Text   
+  quality_checks  Json?     
+  is_current      Boolean?  @default(false)
+  
+  @@map("prompts")
+  @@schema("prompts_schema") // Adicione isso para especificar o schema PostgreSQL
+}

@@ -1,6 +1,6 @@
 // app/api/prompts/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getPromptsByAccountId, savePrompt, processApiResponse } from '@/app/genprompt/_lib/db';
+import { getPromptsByAccountId, savePrompt, processApiResponse } from '@/app/genprompt/_services/api';
 
 // GET route para obter todos os prompts de uma conta
 export async function GET(request: NextRequest) {

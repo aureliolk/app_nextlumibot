@@ -1,5 +1,4 @@
-// app/products/_services/api.ts
-import prisma from '../_lib/db'; // Ajuste o caminho
+import prisma from '@/lib/db';
 
 export interface ProductVariation {
   name: string;

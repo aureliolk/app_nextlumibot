@@ -1,8 +1,11 @@
 -- CreateSchema
-CREATE SCHEMA IF NOT EXISTS "prompt";
+CREATE SCHEMA IF NOT EXISTS "products_schema";
+
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "prompts_schema";
 
 -- CreateTable
-CREATE TABLE "public"."products" (
+CREATE TABLE "products_schema"."products" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
     "url" TEXT NOT NULL,
@@ -20,7 +23,7 @@ CREATE TABLE "public"."products" (
 );
 
 -- CreateTable
-CREATE TABLE "prompt"."prompts" (
+CREATE TABLE "prompts_schema"."prompts" (
     "id" TEXT NOT NULL,
     "account_id" TEXT NOT NULL,
     "prompt" TEXT NOT NULL,
@@ -30,6 +33,7 @@ CREATE TABLE "prompt"."prompts" (
     "prompt_removed" TEXT,
     "prompt_complete" TEXT,
     "quality_checks" JSONB,
+    "is_current" BOOLEAN DEFAULT false,
 
     CONSTRAINT "prompts_pkey" PRIMARY KEY ("id")
 );
