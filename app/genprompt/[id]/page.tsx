@@ -39,13 +39,13 @@ function GenPrompt() {
 
   // Monitorar mudanças no histórico de prompts
   useEffect(() => {
-    // console.log("PromptHistory atualizado:", promptHistory);
+    console.log("PromptHistory atualizado:", promptHistory);
   }, [promptHistory]);
   
   // Carregar dados iniciais
   useEffect(() => {
     if (promptParam && promptParam.id.length > 0) {
-      // console.log('Carregando dados iniciais para o promptParam:', promptParam);
+      console.log('Carregando dados iniciais para o promptParam:', promptParam);
       fetchPromptData();
     }
   }, [promptParam]);
@@ -55,7 +55,7 @@ function GenPrompt() {
     try {
       // Buscar o histórico de prompts com um timestamp para evitar cache
       const timestamp = new Date().getTime();
-      // console.log("Buscando histórico de prompts");
+      console.log("Buscando histórico de prompts");
       
       const historyResponse = await fetch(`/api/prompts?accountId=${promptParam.id}&_t=${timestamp}`, {
         // Adicionar cabeçalhos para evitar cache
@@ -68,19 +68,19 @@ function GenPrompt() {
 
       if (historyResponse.ok) {
         const promptsData = await historyResponse.json();
-        // console.log("Dados recebidos do servidor:", promptsData);
+        console.log("Dados recebidos do servidor:", promptsData);
         
         // Importante: use os dados diretamente, não confie em promptHistory aqui
         setPromptHistory(promptsData);
         
         // O console.log abaixo NÃO mostrará o estado atualizado devido à natureza assíncrona do setState
-        // console.log("Estado atual (ainda não atualizado):", promptHistory);
+        console.log("Estado atual (ainda não atualizado):", promptHistory);
       } else {
         console.error('Erro ao buscar dados dos prompts:', await historyResponse.text());
       }
 
       // Buscar o prompt atual
-      // console.log("Buscando prompt atual");
+      console.log("Buscando prompt atual");
       const currentPromptResponse = await fetch(`/api/prompts/current?accountId=${promptParam.id}&_t=${timestamp}`, {
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -91,7 +91,7 @@ function GenPrompt() {
 
       if (currentPromptResponse.ok) {
         const currentPromptData = await currentPromptResponse.json();
-        // console.log("Prompt atual recebido:", currentPromptData);
+        console.log("Prompt atual recebido:", currentPromptData);
         setCurrentPromptId(currentPromptData.id);
         setResponse(currentPromptData.prompt_complete || currentPromptData.prompt);
       } else if (currentPromptResponse.status !== 404) {
@@ -162,7 +162,7 @@ function GenPrompt() {
 
   // Salvar prompt no banco de dados
   const savePromptToDatabase = async (text: string, apiResponse: string) => {
-    try {
+        try {
       const saveResponse = await fetch('/api/prompts', {
         method: 'POST',
         headers: {
@@ -251,10 +251,10 @@ function GenPrompt() {
       }
 
       const apiResponseText = data[0].text
-        .replace(/\\n/g, '\n')
-        .replace(/\\\"/g, '"')
-        .replace(/\\/g, '')
-        .replace(/\n\n+/g, '\n\n')
+          .replace(/\\n/g, '\n')
+          .replace(/\\\"/g, '"')
+          .replace(/\\/g, '')
+          .replace(/\n\n+/g, '\n\n')
         .trim()
 
       setResponse(apiResponseText)
@@ -393,7 +393,7 @@ function GenPrompt() {
                   onCancel={() => setIsAudioMode(false)}
                 />
                 <AudioUploader
-                  fileInputRef={fileInputRef}
+                  fileInputRef={fileInputRef as any} 
                   audioFile={audioFile}
                   isLoading={isLoading}
                   onFileChange={setAudioFile}
@@ -427,7 +427,7 @@ function GenPrompt() {
               {/* Histórico de prompts */}
               {showPromptHistory && (
                 <PromptHistory
-                  prompts={promptHistory}
+                  prompts={promptHistory as any}
                   currentPromptId={currentPromptId}
                   isSettingCurrent={isSettingCurrent}
                   onRestore={restorePrompt}
