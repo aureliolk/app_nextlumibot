@@ -96,12 +96,14 @@ export async function POST(req: Request) {
 
             const normalizedQuery = normalizeSearchText(query);
 
+            // Removemos a busca nas categorias/JSON por enquanto para evitar o erro
             const products = await prisma.product.findMany({
               where: {
                 OR: [
                   { name: { contains: normalizedQuery, mode: 'insensitive' } },
                   { description: { contains: normalizedQuery, mode: 'insensitive' } },
-                  { categories: { path: '$.name' as any, array_contains: normalizedQuery } }
+                  // Removida a busca em categorias que estava causando erro:
+                  // { categories: { path: '$.name' as any, array_contains: normalizedQuery } }
                 ],
                 active: true,
               },
@@ -123,6 +125,8 @@ export async function POST(req: Request) {
               image: product.image,
               url: `https://duhellen.com.br/produtos/${product.url}`
             }));
+
+            console.log(`Encontrados ${formattedProducts.length} produtos para a consulta "${query}"`);
 
             return { 
               products: formattedProducts,
