@@ -16,18 +16,36 @@ interface StructuredResponse {
   products?: Product[];
 }
 
-// Função para tentar interpretar o conteúdo como JSON estruturado
-const tryParseJSON = (text: string): StructuredResponse | null => {
+// Função para extrair JSON de blocos de código markdown
+const extractJsonFromMarkdown = (text: string): StructuredResponse | null => {
   try {
-    // Tenta analisar o texto como JSON
-    const parsed = JSON.parse(text);
+    // Tenta encontrar conteúdo JSON entre blocos de código
+    const jsonRegex = /```(?:json)?\s*({[\s\S]*?})\s*```/;
+    const match = text.match(jsonRegex);
     
-    // Verifica se tem a estrutura esperada
-    if (typeof parsed.message === 'string') {
-      return parsed as StructuredResponse;
+    if (match && match[1]) {
+      // Se encontrou um bloco de código JSON, analisa-o
+      const jsonContent = match[1].trim();
+      const parsed = JSON.parse(jsonContent);
+      
+      // Verifica se tem a estrutura esperada
+      if (typeof parsed.message === 'string') {
+        return parsed as StructuredResponse;
+      }
     }
+    
+    // Se não houver blocos de código, tenta analisar o texto diretamente
+    // (isso é um fallback e geralmente não será necessário)
+    if (text.trim().startsWith('{') && text.trim().endsWith('}')) {
+      const parsed = JSON.parse(text);
+      if (typeof parsed.message === 'string') {
+        return parsed as StructuredResponse;
+      }
+    }
+
     return null;
   } catch (e) {
+    console.error('Erro ao analisar JSON:', e);
     return null;
   }
 };
@@ -36,7 +54,7 @@ interface ChatMessageListProps {
   messages: Message[];
 }
 
-export default function ChatMessageList({ messages }: ChatMessageListProps) {
+const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll para a última mensagem
@@ -58,14 +76,14 @@ export default function ChatMessageList({ messages }: ChatMessageListProps) {
   return (
     <div className="flex flex-col space-y-4">
       {messages.map((message) => {
-        // Verificamos se é mensagem do assistente e tentamos parsear como JSON
+        // Verificamos se é mensagem do assistente e tentamos extrair JSON
         if (message.role === 'assistant') {
-          const structuredContent = tryParseJSON(message.content);
+          const structuredContent = extractJsonFromMarkdown(message.content);
           
           if (structuredContent) {
             return (
               <div key={message.id} className="flex justify-start">
-                <div className="max-w-[85%] p-4 rounded-lg bg-gray-600 text-gray-100">
+                <div className="max-w-[85%] w-full p-4 rounded-lg bg-gray-600 text-gray-100">
                   {/* Mensagem principal */}
                   <p className="text-sm mb-4">{structuredContent.message}</p>
                   
@@ -169,7 +187,26 @@ export default function ChatMessageList({ messages }: ChatMessageListProps) {
                             {...props} 
                             className="border border-gray-600 p-2"
                           />
-                        )
+                        ),
+                        // Esconde os blocos de código que contêm JSON
+                        code: ({ node, inline, className, children, ...props }: any) => {
+                          if (inline) {
+                            return <code className="bg-gray-800 px-1 py-0.5 rounded text-sm" {...props}>{children}</code>;
+                          }
+                          
+                          // Verifica se é um bloco de código JSON
+                          const content = String(children).trim();
+                          if (content.startsWith('{') && content.includes('"message"')) {
+                            // Não renderiza blocos JSON pois já foram processados
+                            return null;
+                          }
+                          
+                          return (
+                            <pre className="bg-gray-800 p-2 rounded text-sm overflow-x-auto">
+                              <code {...props}>{children}</code>
+                            </pre>
+                          );
+                        }
                       }}
                     >
                       {message.content}
@@ -185,3 +222,5 @@ export default function ChatMessageList({ messages }: ChatMessageListProps) {
     </div>
   );
 };
+
+export default ChatMessageList;
