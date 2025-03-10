@@ -76,8 +76,8 @@ export async function POST(req: Request) {
         }),
         execute: async ({ query, limit }) => {
           try {
-            const { default: prisma } = await import('./_lib/db');
-            const { normalizeSearchText } = await import('./_lib/db');
+            const { default: prisma } = await import('@/lib/db');
+            const { normalizeSearchText } = await import('@/lib/db');
 
             const normalizedQuery = normalizeSearchText(query);
 
@@ -86,7 +86,13 @@ export async function POST(req: Request) {
                 OR: [
                   { name: { contains: normalizedQuery, mode: 'insensitive' } },
                   { description: { contains: normalizedQuery, mode: 'insensitive' } },
-                  { categories: { path: '$.name' as any, array_contains: normalizedQuery } }
+                  // Modificação para lidar com categorias de forma mais flexível
+                  { 
+                    categories: {
+                      // Converte para string para comparação
+                      string_contains: normalizedQuery 
+                    } 
+                  }
                 ],
                 active: true,
               },
@@ -99,27 +105,66 @@ export async function POST(req: Request) {
                 brand: true,
                 gender: true,
                 image: true,
-                variations: true,
+                variations: true, // Este campo será tratado como any para maior flexibilidade
                 categories: true,
-              }
+              } as const
             });
 
-            // Formatar os produtos para uma estrutura mais limpa
-            const formattedProducts = products.map(product => ({
-              id: product.id,
-              name: product.name,
-              price: parseFloat(product.price.toString()).toFixed(2),
-              brand: product.brand,
-              url: product.url,
-              image: product.image,
-              variations: product.variations,
-              categories: product.categories
-            }));
+            // Definir uma interface para variações
+            interface ProductVariation {
+              name?: string;
+              value?: string;
+            }
+
+            // Formatar os produtos para uma estrutura mais limpa e legível
+            const formattedProducts = products.map(product => {
+              // Gerar URL de imagem placeholder se não houver imagem
+              const imageUrl = product.image 
+                ? (product.image.startsWith('http') 
+                  ? product.image 
+                  : `https://duhellen.com.br${product.image}`)
+                : `https://via.placeholder.com/300x400?text=${encodeURIComponent(product.name)}`;
+
+              // Garantir que variations seja um array de variações
+              const variations = (Array.isArray(product.variations) 
+                ? product.variations 
+                : []) as ProductVariation[];
+
+              // Determinar variações de tamanho
+              const sizeVariation = variations.find(
+                (v): v is ProductVariation => 
+                  typeof v === 'object' && 
+                  v !== null && 
+                  v.name?.toLowerCase() === 'tamanho'
+              )?.value || 'P';
+
+              return {
+                id: product.id,
+                name: product.name,
+                price: `R$ ${parseFloat(product.price.toString()).toFixed(2)}`,
+                brand: product.brand || 'Duhellen',
+                url: product.url,
+                image: imageUrl,
+                size: sizeVariation,
+                color: variations.find(
+                  (v): v is ProductVariation => 
+                    typeof v === 'object' && 
+                    v !== null && 
+                    v.name?.toLowerCase() === 'cor'
+                )?.value || 'Não especificada',
+                details: `[Ver mais detalhes](${product.url})`
+              };
+            });
+
+            // Criar uma mensagem formatada em Markdown
+            const productsMessage = formattedProducts.map((product, index) => 
+              `${index + 1}. **${product.name}** - ${product.price} - Cor: ${product.color} - Tamanho: ${product.size} - ${product.details} - ![Imagem](${product.image})`
+            ).join('\n\n');
 
             return { 
               products: formattedProducts, 
               message: formattedProducts.length > 0 
-                ? `Encontrei ${formattedProducts.length} produto(s) relacionados à sua busca.` 
+                ? `Encontrei algumas opções de calcinhas que podem te interessar:\n\n${productsMessage}\n\nSe precisar de mais informações ou ajuda para escolher, estou aqui para ajudar! 😊`
                 : 'Nenhum produto encontrado para esta busca.'
             };
           } catch (error) {
