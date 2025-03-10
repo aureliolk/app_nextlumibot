@@ -82,7 +82,7 @@ export default function ChatPage() {
             <ChatHeader />
             
             {/* Área de mensagens */}
-            <div className="bg-gray-700 rounded-lg p-4 mb-6 h-[400px] overflow-y-auto">
+            <div className="bg-gray-700 rounded-lg p-4 mb-6 h-[600px] overflow-y-auto">
               <ChatMessageList messages={messages} />
             </div>
             

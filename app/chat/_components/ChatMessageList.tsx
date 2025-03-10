@@ -95,12 +95,12 @@ const ChatMessageList: React.FC<ChatMessageListProps> = ({ messages }) => {
                           {product.image && (
                             <div className="mb-2">
                               <img 
-                                src={product.image} 
+                                src="https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png?v=1530129081" 
                                 alt={product.name}
                                 className="w-full h-32 object-cover rounded"
                                 onError={(e) => {
                                   // Fallback para imagem placeholder se a original falhar
-                                  (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Sem+Imagem';
+                                  (e.target as HTMLImageElement).src = 'https://cdn.shopify.com/s/files/1/0533/2089/files/placeholder-images-image_large.png?v=1530129081';
                                 }}
                               />
                             </div>
