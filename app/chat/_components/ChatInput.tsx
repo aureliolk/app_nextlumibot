@@ -4,7 +4,7 @@ interface ChatInputProps {
   input: string;
   isLoading: boolean;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  handleSubmit: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
+  handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void; // Removido o Promise<void>
 }
 
 const ChatInput: React.FC<ChatInputProps> = ({
