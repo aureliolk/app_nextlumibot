@@ -1,17 +1,16 @@
-//prisma/schema.prisma
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
-  schemas  = ["products_schema", "prompts_schema", "public"]
+  schemas  = ["follow_up_schema", "products_schema", "prompts_schema", "public"]
 }
 
 model Product {
-  id          Int       @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   name        String
   url         String
   price       Float
@@ -21,33 +20,81 @@ model Product {
   image       String?
   categories  Json
   variations  Json
-  active      Boolean   @default(true)
-  created_at  DateTime  @default(now())
-  
+  active      Boolean  @default(true)
+  created_at  DateTime @default(now())
+
   @@map("products")
-  @@schema("products_schema") // Adicione isso para especificar o schema PostgreSQL
+  @@schema("products_schema")
 }
 
 model Prompt {
-  id              String    @id @default(uuid())
-  account_id      String    
-  instruction     String    
-  created_at      DateTime  @default(now())
-  is_current      Boolean?  @default(false)
-  promptContent   PromptContent?
-  
+  id            String         @id @default(uuid())
+  account_id    String
+  created_at    DateTime       @default(now())
+  is_current    Boolean?       @default(false)
+  instruction   String
+  promptContent PromptContent?
+
   @@map("prompts")
   @@schema("prompts_schema")
 }
 
 model PromptContent {
-  id              String    @id @default(uuid())
-  prompt_id       String    @unique
-  prompt          Prompt    @relation(fields: [prompt_id], references: [id])
-  prompt_created  String?   @db.Text   
-  prompt_removed  String?   @db.Text   
-  prompt_complete String?   @db.Text
-  
+  id              String  @id @default(uuid())
+  prompt_id       String  @unique
+  prompt_created  String?
+  prompt_removed  String?
+  prompt_complete String?
+  prompt          Prompt  @relation(fields: [prompt_id], references: [id])
+
   @@map("prompt_contents")
   @@schema("prompts_schema")
+}
+
+model FollowUpCampaign {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  created_at  DateTime   @default(now())
+  active      Boolean    @default(true)
+  steps       Json
+  follow_ups  FollowUp[]
+
+  @@map("follow_up_campaigns")
+  @@schema("follow_up_schema")
+}
+
+model FollowUp {
+  id              String            @id @default(uuid())
+  campaign_id     String
+  client_id       String
+  current_step    Int               @default(0)
+  status          String
+  started_at      DateTime          @default(now())
+  updated_at      DateTime          @updatedAt
+  next_message_at DateTime?
+  completed_at    DateTime?
+  is_responsive   Boolean           @default(false)
+  messages        FollowUpMessage[]
+  campaign        FollowUpCampaign  @relation(fields: [campaign_id], references: [id])
+
+  @@index([client_id])
+  @@index([status])
+  @@map("follow_ups")
+  @@schema("follow_up_schema")
+}
+
+model FollowUpMessage {
+  id           String    @id @default(uuid())
+  follow_up_id String
+  step         Int
+  content      String
+  sent_at      DateTime  @default(now())
+  delivered    Boolean   @default(false)
+  delivered_at DateTime?
+  follow_up    FollowUp  @relation(fields: [follow_up_id], references: [id])
+
+  @@index([follow_up_id, step])
+  @@map("follow_up_messages")
+  @@schema("follow_up_schema")
 }
