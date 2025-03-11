@@ -21,6 +21,10 @@ export default function ChatPage() {
     api: '/api/chat',
     id: 'duhellen-chat',
     maxSteps: 5,
+    onError: (err) => {
+      console.error('Erro na comunicação com a API:', err);
+      setChatError('Ops! Tivemos um problema na comunicação. Por favor, tente novamente.');
+    }
   });
   
   const [chatError, setChatError] = useState<string | null>(null);
