@@ -8,6 +8,157 @@ import { NextResponse } from 'next/server';
 // Permitir respostas streaming por até 30 segundos
 export const maxDuration = 30;
 
+// Função para processar requisições externas (API para integração)
+async function handleExternalRequest(messages: any[], conversationId?: string) {
+  try {
+    // Determinar a intenção da mensagem mais recente
+    const lastMessage = messages[messages.length - 1].content;
+    const intent = advancedIntentClassification(lastMessage);
+    
+    // Executar a consulta com o modelo
+    const result = streamText({
+      model: openai('gpt-4o'),
+      messages: [
+        {
+          role: 'system',
+          content: `Você é a DUH, uma consultora especializada de lingerie da Duhellen. 
+          
+          Diretrizes de Atendimento:
+          - Seja empática e acolhedora
+          - Use linguagem próxima e amigável 
+          - Use emojis moderadamente
+          - Foque em entender a real necessidade do cliente
+          - Ofereça soluções personalizadas
+          
+          Contexto da Interação:
+          - Intenção Detectada: ${intent}
+          ${conversationId ? `- ID da Conversa: ${conversationId}` : ''}
+          
+          FORMATO DE RESPOSTA PARA API EXTERNA:
+          Responda no seguinte formato JSON:
+          {
+            "message": "Mensagem amigável e consultiva",
+            "products": [
+              {
+                "name": "Nome do produto",
+                "price": "79.90",
+                "image": "URL da imagem",
+                "url": "URL do produto"
+              }
+            ]
+          }
+          
+          Regras Especiais:
+          - Sempre personalizar a resposta
+          - Sugerir produtos complementares quando possível
+          - Manter respostas concisas (máximo 2 parágrafos)
+          - Incluir dicas de estilo e consultoria
+          `
+        },
+        ...messages
+      ],
+      tools: {
+        // As mesmas ferramentas já definidas serão usadas
+        searchProducts: tool({
+          description: 'Buscar produtos por nome, descrição ou categoria',
+          parameters: z.object({
+            query: z.string().describe('Termos de busca'),
+            limit: z.number().optional().default(5).describe('Número máximo de resultados'),
+          }),
+          execute: async ({ query, limit }) => {
+            try {
+              const normalizedQuery = normalizeSearchText(query);
+
+              const products = await prisma.product.findMany({
+                where: {
+                  OR: [
+                    { name: { contains: normalizedQuery, mode: 'insensitive' } },
+                    { description: { contains: normalizedQuery, mode: 'insensitive' } },
+                    {
+                      categories: {
+                        array_contains: normalizedQuery
+                      }
+                    }
+                  ],
+                  active: true,
+                },
+                take: limit,
+                select: {
+                  id: true,
+                  name: true,
+                  url: true,
+                  price: true,
+                  image: true,
+                }
+              });
+
+              // Formatar os produtos
+              const formattedProducts = products.map(product => ({
+                id: product.id,
+                name: product.name,
+                price: parseFloat(product.price.toString()).toFixed(2),
+                image: product.image,
+                url: `https://duhellen.com.br/produtos/${product.url}`
+              }));
+
+              return {
+                products: formattedProducts,
+                count: formattedProducts.length
+              };
+            } catch (error) {
+              console.error('Erro ao buscar produtos:', error);
+              return {
+                products: [],
+                count: 0,
+                error: 'Erro ao buscar produtos'
+              };
+            }
+          },
+        }),
+      },
+      maxSteps: 3,
+    });
+    
+    // Coletar a resposta completa (não usar streaming)
+    let fullResponse = '';
+    for await (const part of result as any) {
+      fullResponse += part;
+    }
+    
+    // Processar a resposta para o formato adequado
+    try {
+      // Se a resposta já é um JSON válido
+      const jsonResponse = JSON.parse(fullResponse);
+      
+      // Adicionar informações de contexto
+      return NextResponse.json({
+        ...jsonResponse,
+        conversation_id: conversationId || crypto.randomUUID(),
+        assistant_message: {
+          role: 'assistant',
+          content: jsonResponse.message
+        }
+      });
+    } catch (e) {
+      // Se não for JSON, apenas retornar como texto
+      return NextResponse.json({
+        message: fullResponse,
+        conversation_id: conversationId || crypto.randomUUID(),
+        assistant_message: {
+          role: 'assistant',
+          content: fullResponse
+        }
+      });
+    }
+  } catch (error: any) {
+    console.error('Erro na requisição externa:', error);
+    return NextResponse.json({ 
+      error: 'Erro ao processar mensagem',
+      details: error.message
+    }, { status: 500 });
+  }
+}
+
 // Tipos de ferramentas avançadas
 interface SizeRecommendationTool {
   bust: number;
@@ -57,13 +208,20 @@ function advancedIntentClassification(message: string) {
 }
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  const { messages, conversationId, external } = await req.json();
   
   // Verificar se temos mensagens para processar
   if (!messages || messages.length === 0) {
     return NextResponse.json({ error: 'Nenhuma mensagem fornecida' }, { status: 400 });
   }
   
+  // Se for uma requisição externa (API) e não do componente useChat
+  if (external === true) {
+    // Usar nossa implementação específica para integrações externas
+    return handleExternalRequest(messages, conversationId);
+  }
+  
+  // Caso contrário, usar o fluxo normal para o front-end
   const lastMessage = messages[messages.length - 1].content;
 
   // Classificação avançada de intenção
