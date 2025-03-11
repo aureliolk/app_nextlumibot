@@ -1,4 +1,4 @@
-// lib/follow-up/scheduler.ts
+// app/api/follow-up/_lib/scheduler.ts
 import prisma from '@/lib/db';
 
 // Mapa para armazenar timeouts ativos

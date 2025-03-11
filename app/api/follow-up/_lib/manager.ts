@@ -1,4 +1,4 @@
-// lib/follow-up/manager.ts
+// app/api/follow-up/_lib/manager.ts
 import prisma from '@/lib/db';
 import { scheduleMessage, cancelScheduledMessages } from './scheduler';
 import path from 'path';

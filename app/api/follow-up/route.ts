@@ -1,7 +1,7 @@
 // app/api/follow-up/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
-import { processFollowUpSteps } from '@/lib/follow-up/manager';
+import { processFollowUpSteps } from './_lib/manager';
 import { z } from 'zod';
 
 // Schema de validação para o corpo da requisição
