@@ -61,20 +61,57 @@ export async function scheduleMessage(message: ScheduledMessage): Promise<string
 }
 
 // Função para enviar a mensagem para a API Lumibot
-async function sendMessageToLumibot(clientId: string, content: string): Promise<boolean> {
+async function sendMessageToLumibot(clientId: string, content: string, metadata?: Record<string, any>): Promise<boolean> {
   try {
     // Configurações fixas para a API conforme solicitado
     const accountId = 10;
     const conversationId = 3;
     const apiToken = 'Z41o5FJFVEdZJjQaqDz6pYC7';
     
+    // Extrair parâmetros do template do metadata se disponível
+    const templateParams = metadata?.templateParams || {};
+    
+    // Log dos dados recebidos
+    console.log('=== DADOS DA MENSAGEM ===');
+    console.log('clientId:', clientId);
+    console.log('content:', content);
+    console.log('metadata completo:', JSON.stringify(metadata, null, 2));
+    
+    // Verificar se a mensagem contém placeholders como {{1}}
+    const hasPlaceholders = content.includes('{{') && content.includes('}}');
+    
+    // Extrair parâmetros processados do metadata ou usar valores padrão
+    const processedParams = metadata?.processedParams || metadata?.processed_params || {};
+    
+    // Preparar body base da requisição
+    const requestBody: any = {
+      "content": content,
+      "message_type": "outgoing",
+      "template_params": {
+        "name": templateParams.name || metadata?.template_name || "",
+        "category": templateParams.category || metadata?.category || "",
+        "language": templateParams.language || "pt_BR"
+      }
+    };
+    
+    // Adicionar processed_params apenas se a mensagem contiver placeholders
+    if (hasPlaceholders) {
+      console.log('Mensagem contém placeholders, adicionando processed_params');
+      requestBody.template_params.processed_params = {
+        "1": processedParams["1"] || metadata?.clientName || clientId
+      };
+    } else {
+      console.log('Mensagem não contém placeholders, não adicionando processed_params');
+    }
+    
+    // Log do body da requisição
+    console.log('=== BODY DA REQUISIÇÃO ===');
+    console.log(JSON.stringify(requestBody, null, 2));
+    
     // Fazer a requisição POST para a API usando axios
     const response = await axios.post(
       `https://app.lumibot.com.br/api/v1/accounts/${accountId}/conversations/${conversationId}/messages`,
-      {
-        'content': content,
-        'message_type': 'outgoing'
-      },
+      requestBody,
       {
         headers: {
           'Content-Type': 'application/json',
@@ -83,12 +120,20 @@ async function sendMessageToLumibot(clientId: string, content: string): Promise<
       }
     );
     
+    // Log da resposta
+    console.log('=== RESPOSTA DA API ===');
+    console.log('Status:', response.status);
+    console.log('Resposta:', JSON.stringify(response.data, null, 2));
+    
     // O axios já lança um erro se a resposta não for bem-sucedida
     const responseData = response.data;
-    console.log(`Mensagem enviada com sucesso para cliente ${clientId}:`, responseData);
+    console.log(`Mensagem enviada com sucesso para cliente ${clientId}`);
     return true;
-  } catch (error) {
-    console.error(`Erro ao enviar mensagem para a API Lumibot:`, error);
+  } catch (error: any) {
+    console.error(`Erro ao enviar mensagem para a API Lumibot:`);
+    console.error('Status do erro:', error.response?.status);
+    console.error('Mensagem do erro:', error.message);
+    console.error('Dados da resposta de erro:', JSON.stringify(error.response?.data, null, 2));
     return false;
   }
 }
@@ -96,10 +141,21 @@ async function sendMessageToLumibot(clientId: string, content: string): Promise<
 // Função para enviar a mensagem
 async function sendMessage(message: ScheduledMessage): Promise<void> {
   try {
+    // Log da mensagem que está sendo processada
+    console.log('=== PROCESSANDO MENSAGEM AGENDADA ===');
+    console.log('followUpId:', message.followUpId);
+    console.log('stepIndex:', message.stepIndex);
+    console.log('clientId:', message.clientId);
+    console.log('scheduledTime:', message.scheduledTime);
+    console.log('message:', message.message);
+    console.log('metadata:', JSON.stringify(message.metadata, null, 2));
+    
     // Verificar se o follow-up ainda está ativo
     const followUp = await prisma.followUp.findUnique({
       where: { id: message.followUpId }
     });
+    
+    console.log('Status do follow-up:', followUp?.status);
     
     if (!followUp || followUp.status !== 'active') {
       console.log(`Follow-up ${message.followUpId} não está mais ativo, cancelando envio.`);
@@ -108,7 +164,7 @@ async function sendMessage(message: ScheduledMessage): Promise<void> {
     
     // Enviar a mensagem para a API Lumibot
     console.log(`Enviando mensagem do follow-up ${message.followUpId} etapa ${message.stepIndex} para cliente ${message.clientId}`);
-    const success = await sendMessageToLumibot(message.clientId, message.message);
+    const success = await sendMessageToLumibot(message.clientId, message.message, message.metadata);
     
     if (success) {
       // Atualizar o status da mensagem no banco de dados
@@ -149,7 +205,7 @@ export interface MessageProcessor {
 // Processador que integra com a API Lumibot
 const lumibotProcessor: MessageProcessor = {
   process: async (message: ScheduledMessage) => {
-    return await sendMessageToLumibot(message.clientId, message.message);
+    return await sendMessageToLumibot(message.clientId, message.message, message.metadata);
   }
 };
 

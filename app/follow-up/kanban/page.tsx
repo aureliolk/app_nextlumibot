@@ -58,9 +58,26 @@ export default function KanbanPage() {
       const fetchCampaignSteps = async () => {
         try {
           const response = await axios.get(`/api/follow-up/campaigns/${selectedFollowUp.campaign_id}`);
-          if (response.data.success) {
-            const steps = JSON.parse(response.data.data.steps);
-            setCampaignSteps(steps);
+          if (response.data.success && response.data.data) {
+            // Verificar se steps é uma string ou já é um objeto
+            const stepsData = response.data.data.steps;
+            let parsedSteps = [];
+            
+            if (typeof stepsData === 'string') {
+              try {
+                parsedSteps = JSON.parse(stepsData);
+              } catch (e) {
+                console.error('Erro ao analisar steps:', e);
+                parsedSteps = [];
+              }
+            } else if (Array.isArray(stepsData)) {
+              parsedSteps = stepsData;
+            } else if (typeof stepsData === 'object') {
+              parsedSteps = [stepsData];
+            }
+            
+            console.log('Etapas da campanha carregadas:', parsedSteps);
+            setCampaignSteps(parsedSteps);
           }
         } catch (err) {
           console.error('Erro ao carregar etapas da campanha:', err);

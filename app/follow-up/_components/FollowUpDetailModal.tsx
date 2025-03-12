@@ -11,6 +11,7 @@ interface FollowUpDetailModalProps {
   onCancel: (id: string) => void;
   onResume?: (id: string) => void;
   onAdvance?: (id: string) => void;
+  onRemoveClient?: (id: string) => void;
 }
 
 export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
@@ -19,7 +20,8 @@ export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
   onClose,
   onCancel,
   onResume,
-  onAdvance
+  onAdvance,
+  onRemoveClient
 }) => {
   if (!followUp) return null;
 
@@ -264,6 +266,14 @@ export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
                 className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
               >
                 Cancelar Follow-up
+              </button>
+            )}
+            {onRemoveClient && (
+              <button
+                onClick={() => onRemoveClient(followUp.client_id)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+              >
+                Remover Cliente
               </button>
             )}
             <button

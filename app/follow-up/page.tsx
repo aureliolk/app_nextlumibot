@@ -59,8 +59,26 @@ export default function FollowUpPage() {
   const fetchCampaignSteps = async (campaignId: string) => {
     try {
       const response = await axios.get(`/api/follow-up/campaigns/${campaignId}`);
-      if (response.data.success) {
-        setCampaignSteps(JSON.parse(response.data.steps || '[]'));
+      if (response.data.success && response.data.data) {
+        // Verificar se steps é uma string ou já é um objeto
+        const stepsData = response.data.data.steps;
+        let parsedSteps = [];
+        
+        if (typeof stepsData === 'string') {
+          try {
+            parsedSteps = JSON.parse(stepsData);
+          } catch (e) {
+            console.error('Erro ao analisar steps:', e);
+            parsedSteps = [];
+          }
+        } else if (Array.isArray(stepsData)) {
+          parsedSteps = stepsData;
+        } else if (typeof stepsData === 'object') {
+          parsedSteps = [stepsData];
+        }
+        
+        console.log('Etapas da campanha carregadas:', parsedSteps);
+        setCampaignSteps(parsedSteps);
       }
     } catch (err) {
       console.error('Erro ao buscar etapas da campanha:', err);
@@ -197,6 +215,7 @@ export default function FollowUpPage() {
               campaignSteps={campaignSteps}
               onClose={() => setSelectedFollowUp(null)}
               onCancel={handleCancelFollowUp}
+              onRemoveClient={handleRemoveClient}
             />
 
         </div>

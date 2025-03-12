@@ -202,13 +202,39 @@ export async function processFollowUpSteps(followUpId: string): Promise<void> {
       }
     });
 
+    // Extrair o nome do cliente do ID ou usar valores default
+    // Na prática, você teria uma busca no banco de dados para obter o nome do cliente
+    // Por enquanto, vamos extrair a parte antes do @ se for um email, ou usar o próprio ID
+    let clientName = followUp.client_id;
+    if (clientName.includes('@')) {
+      clientName = clientName.split('@')[0];
+    }
+    
+    // Formatar o nome do cliente para título caso (primeira letra maiúscula)
+    if (clientName && clientName.length > 0) {
+      clientName = clientName.charAt(0).toUpperCase() + clientName.slice(1).toLowerCase();
+    }
+    
     // Agendar o envio da mensagem atual
     await scheduleMessage({
       followUpId,
       stepIndex: currentStepIndex,
-      message: currentStep.mensagem,
+      message: currentStep.mensagem || currentStep.message,
       scheduledTime: new Date(), // Enviar imediatamente
-      clientId: followUp.client_id
+      clientId: followUp.client_id,
+      metadata: {
+        template_name: currentStep.template_name,
+        category: currentStep.category,
+        clientName: clientName,
+        templateParams: {
+          name: currentStep.template_name,
+          category: currentStep.category,
+          language: "pt_BR"
+        },
+        processedParams: {
+          "1": clientName
+        }
+      }
     });
 
     // Agendar a próxima etapa se o cliente não responder
