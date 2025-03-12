@@ -16,6 +16,12 @@ interface FollowUpStep {
 
 // Função para converter string de tempo em milissegundos
 function parseTimeString(timeStr: string): number {
+  // Se o tempo estiver vazio ou for inválido, usar 30 minutos como padrão
+  if (!timeStr || timeStr.trim() === "") {
+    console.log("Tempo de espera não definido, usando padrão de 30 minutos");
+    return 30 * 60 * 1000; // 30 minutos
+  }
+
   const units: Record<string, number> = {
     's': 1000,           // segundos
     'm': 60 * 1000,      // minutos
@@ -23,16 +29,33 @@ function parseTimeString(timeStr: string): number {
     'd': 24 * 60 * 60 * 1000, // dias
   };
 
+  // Tentar converter formatos específicos como "10 minutos", "1 hora", etc.
+  if (timeStr.includes("minutos") || timeStr.includes("minuto")) {
+    const minutos = parseInt(timeStr);
+    return isNaN(minutos) ? 30 * 60 * 1000 : minutos * 60 * 1000;
+  } else if (timeStr.includes("hora") || timeStr.includes("horas")) {
+    const horas = parseInt(timeStr);
+    return isNaN(horas) ? 60 * 60 * 1000 : horas * 60 * 60 * 1000;
+  } else if (timeStr.includes("dias") || timeStr.includes("dia")) {
+    const dias = parseInt(timeStr);
+    return isNaN(dias) ? 24 * 60 * 60 * 1000 : dias * 24 * 60 * 60 * 1000;
+  } else if (timeStr.toLowerCase() === "imediatamente") {
+    return 1000; // 1 segundo, praticamente imediato
+  }
+
+  // Formato padrão: "30m", "2h", "1d"
   const match = timeStr.match(/^(\d+)([smhd])$/i);
   if (!match) {
-    throw new Error(`Formato de tempo inválido: ${timeStr}. Use formatos como "30m", "2h", "1d"`);
+    console.warn(`Formato de tempo inválido: ${timeStr}. Usando padrão de 30 minutos`);
+    return 30 * 60 * 1000; // 30 minutos como padrão
   }
 
   const value = parseInt(match[1]);
   const unit = match[2].toLowerCase();
 
   if (!(unit in units)) {
-    throw new Error(`Unidade de tempo desconhecida: ${unit}`);
+    console.warn(`Unidade de tempo desconhecida: ${unit}. Usando padrão de 30 minutos`);
+    return 30 * 60 * 1000;
   }
 
   return value * units[unit];

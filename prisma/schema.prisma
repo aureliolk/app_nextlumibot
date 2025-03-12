@@ -75,6 +75,7 @@ model FollowUp {
   next_message_at DateTime?
   completed_at    DateTime?
   is_responsive   Boolean           @default(false)
+  metadata        String?           // Campo para armazenar metadados como JSON
   messages        FollowUpMessage[]
   campaign        FollowUpCampaign  @relation(fields: [campaign_id], references: [id])
 

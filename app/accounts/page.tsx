@@ -49,9 +49,11 @@ export default function AccountsPage() {
   const fetchAccounts = async () => {
     try {
       const response = await axios.get("https://webhookn8n.lumibot.com.br/webhook/accounts/list");
+      
       if (response.data) {
-       
+        console.log(response.data[4].custom_attributes);
         setAccounts(response.data);
+        
       }
     } catch (err) {
       setError("Erro ao carregar as contas.");
@@ -254,13 +256,13 @@ export default function AccountsPage() {
                     {account.name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {account.custom_attributes[1]?.bot || "-"}
+                    {account.custom_attributes.bot || "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {account.custom_attributes[1]?.token || "-"}
+                    {account.custom_attributes.token || "-"}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <Link target="blank" href={account.custom_attributes[2]?.crm || "-"}>{account.custom_attributes[2]?.crm || "-"}</Link>
+                    <Link target="blank" href={account.custom_attributes.crm || "-"}>{account.custom_attributes.crm || "-"}</Link>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {new Date(account.created_at).toLocaleDateString()}
