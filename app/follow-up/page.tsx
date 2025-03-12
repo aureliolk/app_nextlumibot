@@ -54,6 +54,7 @@ export default function FollowUpPage() {
   const [showNewForm, setShowNewForm] = useState(false);
   const [newClientId, setNewClientId] = useState('');
   const [selectedCampaignId, setSelectedCampaignId] = useState('');
+  const [campaignSteps, setCampaignSteps] = useState<any[]>([]);
 
   // Função para carregar os follow-ups
   const fetchFollowUps = async () => {
@@ -79,11 +80,30 @@ export default function FollowUpPage() {
     }
   };
 
+  // Função para buscar as etapas da campanha
+  const fetchCampaignSteps = async (campaignId: string) => {
+    try {
+      const response = await axios.get(`/api/follow-up/campaigns/${campaignId}`);
+      if (response.data.success) {
+        setCampaignSteps(JSON.parse(response.data.steps || '[]'));
+      }
+    } catch (err) {
+      console.error('Erro ao buscar etapas da campanha:', err);
+    }
+  };
+
   // Buscar dados ao carregar a página e quando a tab muda
   useEffect(() => {
     fetchFollowUps();
     fetchCampaigns();
   }, [activeTab]);
+  
+  // Quando um follow-up é selecionado, buscar as etapas da campanha
+  useEffect(() => {
+    if (selectedFollowUp) {
+      fetchCampaignSteps(selectedFollowUp.campaign_id);
+    }
+  }, [selectedFollowUp]);
 
   // Filtrar follow-ups pelo termo de busca
   const filteredFollowUps = followUps.filter(followUp => 
@@ -419,8 +439,42 @@ export default function FollowUpPage() {
                       </p>
                     </div>
 
+                    {/* Etapas da Campanha */}
+                    <div className="mt-4">
+                      <h3 className="text-lg font-medium text-white mb-2">Etapas da Campanha</h3>
+                      {campaignSteps.length > 0 ? (
+                        <div className="bg-gray-700 rounded-lg overflow-hidden">
+                          <div className="max-h-60 overflow-y-auto">
+                            <table className="min-w-full divide-y divide-gray-600">
+                              <thead className="bg-gray-800">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Etapa</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Mensagem</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Tempo de Espera</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-600">
+                                {campaignSteps.map((step, index) => (
+                                  <tr key={index} className={index === selectedFollowUp.current_step ? 'bg-orange-900/30' : ''}>
+                                    <td className="px-4 py-2 text-sm text-white">{index}</td>
+                                    <td className="px-4 py-2 text-sm text-gray-300">
+                                      {step.mensagem?.substring(0, 50)}
+                                      {step.mensagem?.length > 50 ? '...' : ''}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-gray-300">{step.tempo_de_espera}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-gray-400 text-center">Nenhuma etapa encontrada</p>
+                      )}
+                    </div>
+
                     {selectedFollowUp.messages && selectedFollowUp.messages.length > 0 ? (
-                      <div>
+                      <div className="mt-4">
                         <h3 className="text-lg font-medium text-white mb-2">Mensagens</h3>
                         <div className="space-y-2 max-h-60 overflow-y-auto">
                           {selectedFollowUp.messages.map((message) => (
@@ -437,7 +491,7 @@ export default function FollowUpPage() {
                         </div>
                       </div>
                     ) : (
-                      <p className="text-gray-400 text-center">Nenhuma mensagem enviada</p>
+                      <p className="text-gray-400 text-center mt-4">Nenhuma mensagem enviada</p>
                     )}
 
                     <div className="mt-6 flex justify-end">
