@@ -6,14 +6,15 @@ import axios from 'axios';
 
 // Importando os componentes
 import {
-  Header,
   ErrorMessage,
   ActionBar,
   NewFollowUpForm,
   FollowUpTable,
   FollowUpDetailModal,
-  Footer
+  Footer,
+  Header
 } from './_components';
+import MainNavigation from './_components/MainNavigation';
 
 // Importando os tipos
 import { FollowUp, Campaign, CampaignStep } from './_types';
@@ -150,11 +151,12 @@ export default function FollowUpPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 py-6 flex flex-col justify-center sm:py-12">
-      <div className="w-full max-w-4xl mx-auto px-4">
-        <div className="bg-gray-800 shadow-xl rounded-lg overflow-hidden">
-          <div className="p-6 sm:p-8">
-            <Header title="Gerenciador de Follow-up" />
+    <div className="min-h-screen bg-gray-900 flex flex-col">
+      <MainNavigation />
+      
+      <div className="flex-1 container mx-auto px-4 py-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold mb-4">Lista de Follow-ups</h1>
 
             <ErrorMessage 
               message={error} 
@@ -197,10 +199,10 @@ export default function FollowUpPage() {
               onCancel={handleCancelFollowUp}
             />
 
-            <Footer />
-          </div>
         </div>
       </div>
+      
+      <Footer />
     </div>
   );
 }

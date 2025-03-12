@@ -2,15 +2,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/db';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(request: NextRequest) {
+  // Obter o ID da URL diretamente
+  const url = request.url;
+  const parts = url.split('/');
+  const id = parts[parts.length - 1]; // Pegar o último segmento da URL
+  
   try {
-    const campaignId = params.id;
-    
     const campaign = await prisma.followUpCampaign.findUnique({
-      where: { id: campaignId },
+      where: { id },
       select: {
         id: true,
         name: true,
@@ -32,7 +32,7 @@ export async function GET(
     
     return NextResponse.json({
       success: true,
-      ...campaign
+      data: campaign
     });
     
   } catch (error) {

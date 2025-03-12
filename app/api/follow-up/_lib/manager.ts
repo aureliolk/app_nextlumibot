@@ -15,7 +15,7 @@ interface FollowUpStep {
 }
 
 // Função para converter string de tempo em milissegundos
-function parseTimeString(timeStr: string): number {
+export function parseTimeString(timeStr: string): number {
   // Se o tempo estiver vazio ou for inválido, usar 30 minutos como padrão
   if (!timeStr || timeStr.trim() === "") {
     console.log("Tempo de espera não definido, usando padrão de 30 minutos");
@@ -78,8 +78,8 @@ export async function loadFollowUpData(campaignId?: string): Promise<FollowUpSte
       return JSON.parse(campaign.steps as string) as FollowUpStep[];
     }
 
-    // Caso contrário, carregar do arquivo CSV
-    const csvFilePath = path.join(process.cwd(), 'public', 'follow up sabrina nunes - Página1.csv');
+    // Caso contrário, carregar do arquivo CSV mais recente
+    const csvFilePath = path.join(process.cwd(), 'public', 'follow-up-sabrina-nunes-atualizado.csv');
     
     // Verificar se o arquivo existe
     try {
@@ -100,9 +100,22 @@ export async function loadFollowUpData(campaignId?: string): Promise<FollowUpSte
       stream
         .pipe(csv({
           separator: ',',
-          headers: ['etapa', 'mensagem', 'tempo_de_espera', 'condicionais']
+          headers: [
+            'etapa', 
+            'tempo_de_espera', 
+            'template_name', 
+            'category', 
+            'mensagem', 
+            'auto_respond', 
+            'status'
+          ]
         }))
-        .on('data', (data) => results.push(data))
+        .on('data', (data) => {
+          // Filtrar cabeçalhos ou linhas vazias
+          if (data.etapa && data.etapa !== 'Etapa do Funil') {
+            results.push(data);
+          }
+        })
         .on('end', () => resolve(results))
         .on('error', (error) => reject(error));
     });
@@ -180,7 +193,10 @@ export async function processFollowUpSteps(followUpId: string): Promise<void> {
       data: {
         follow_up_id: followUpId,
         step: currentStepIndex,
-        content: currentStep.mensagem,
+        content: currentStep.mensagem || currentStep.message,
+        funnel_stage: currentStep.etapa || currentStep.stage_name,
+        template_name: currentStep.template_name,
+        category: currentStep.category,
         sent_at: new Date(),
         delivered: false
       }

@@ -81,9 +81,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Carregar a campanha para verificar se existe
+    // Carregar a campanha para verificar se existe e obter o primeiro estágio
     const campaign = await prisma.followUpCampaign.findUnique({
-      where: { id: targetCampaignId }
+      where: { id: targetCampaignId },
+      include: {
+        stages: {
+          orderBy: {
+            order: 'asc'
+          },
+          take: 1 // Pegar o primeiro estágio (menor ordem)
+        }
+      }
     });
 
     if (!campaign) {
@@ -96,6 +104,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Obter o primeiro estágio do funil da campanha
+    const initialStageId = campaign.stages.length > 0 ? campaign.stages[0].id : null;
+
     // Criar um novo follow-up
     const newFollowUp = await prisma.followUp.create({
       data: {
@@ -103,6 +114,7 @@ export async function POST(req: NextRequest) {
         client_id: clientId,
         status: "active",
         current_step: 0,
+        current_stage_id: initialStageId,
         started_at: new Date(),
         next_message_at: new Date(), // Inicia imediatamente
         is_responsive: false,
@@ -169,7 +181,7 @@ export async function GET(req: NextRequest) {
         },
         messages: {
           orderBy: { sent_at: 'desc' },
-          take: 1
+          take: 5
         }
       },
       orderBy: { updated_at: 'desc' },
@@ -177,9 +189,37 @@ export async function GET(req: NextRequest) {
       take: limit
     });
 
+    // Expandir os dados com o nome do estágio atual
+    const followUpsWithStageNames = await Promise.all(followUps.map(async (followUp) => {
+      // Se temos um current_stage_id, buscar o nome do estágio
+      let current_stage_name = null;
+      if (followUp.current_stage_id) {
+        const stage = await prisma.followUpFunnelStage.findUnique({
+          where: { id: followUp.current_stage_id }
+        });
+        if (stage) {
+          current_stage_name = stage.name;
+        }
+      } else {
+        // Se não temos um current_stage_id mas temos mensagens, usar o último estágio conhecido
+        const lastMessage = followUp.messages
+          .filter(m => m.funnel_stage)
+          .sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())[0];
+        
+        if (lastMessage?.funnel_stage) {
+          current_stage_name = lastMessage.funnel_stage;
+        }
+      }
+      
+      return {
+        ...followUp,
+        current_stage_name
+      };
+    }));
+
     return NextResponse.json({
       success: true,
-      data: followUps,
+      data: followUpsWithStageNames,
       pagination: {
         total,
         page,

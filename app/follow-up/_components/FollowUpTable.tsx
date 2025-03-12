@@ -8,6 +8,8 @@ export interface FollowUp {
   campaign_id: string;
   client_id: string;
   current_step: number;
+  current_stage_id?: string;
+  current_stage_name?: string;
   status: string;
   started_at: string;
   next_message_at: string | null;
@@ -20,7 +22,10 @@ export interface FollowUp {
     id: string;
     follow_up_id: string;
     step: number;
+    funnel_stage?: string;
     content: string;
+    template_name?: string;
+    category?: string;
     sent_at: string;
     delivered: boolean;
     delivered_at: string | null;
@@ -102,7 +107,10 @@ export const FollowUpTable: React.FC<FollowUpTableProps> = ({
                 {followUp.campaign.name}
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                {followUp.current_step}
+                <div className="flex flex-col">
+                  <span className="font-medium">{followUp.current_stage_name || 'Não definido'}</span>
+                  <span className="text-xs text-gray-400">Etapa: {followUp.current_step + 1}</span>
+                </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
                 <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
