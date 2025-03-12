@@ -128,35 +128,143 @@ export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Etapas da Campanha */}
+          {/* Etapas do Funil e Estágios */}
           <div className="mt-4">
-            <h3 className="text-lg font-medium text-white mb-2">Etapas da Campanha</h3>
+            <h3 className="text-lg font-medium text-white mb-2">Etapas e Estágios do Funil</h3>
             {campaignSteps.length > 0 ? (
               <div className="bg-gray-700 rounded-lg overflow-hidden">
-                <div className="max-h-60 overflow-y-auto">
-                  <table className="min-w-full divide-y divide-gray-600">
-                    <thead className="bg-gray-800">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Etapa</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Estágio do Funil</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Mensagem</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Tempo de Espera</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-600">
-                      {campaignSteps.map((step, index) => (
-                        <tr key={index} className={index === followUp.current_step ? 'bg-orange-900/30' : ''}>
-                          <td className="px-4 py-2 text-sm text-white">{index + 1}</td>
-                          <td className="px-4 py-2 text-sm text-orange-400">{step.stage_name || 'Não definido'}</td>
-                          <td className="px-4 py-2 text-sm text-gray-300">
-                            {step.mensagem?.substring(0, 50) || step.message?.substring(0, 50)}
-                            {(step.mensagem?.length > 50 || step.message?.length > 50) ? '...' : ''}
-                          </td>
-                          <td className="px-4 py-2 text-sm text-gray-300">{step.tempo_de_espera || step.wait_time}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="max-h-80 overflow-y-auto">
+                  {/* Agrupar os estágios por etapa do funil */}
+                  {(() => {
+                    // Log para debug - verificar o conteúdo de campaignSteps
+                    console.log("campaignSteps recebidos no modal:", campaignSteps);
+                    
+                    // Função para agrupar estágios por etapa do funil
+                    const etapas: Record<string, typeof campaignSteps> = {};
+                    
+                    // Agrupar por etapa do funil
+                    campaignSteps.forEach((step, index) => {
+                      // Verificar todos os campos possíveis para o nome da etapa
+                      const etapaFunil = step.etapa || step.stage_name || 'Sem etapa definida';
+                      console.log(`Processando estágio ${index} - Etapa: "${etapaFunil}"`);
+                      
+                      if (!etapas[etapaFunil]) {
+                        etapas[etapaFunil] = [];
+                        console.log(`Criando novo grupo para etapa: "${etapaFunil}"`);
+                      }
+                      
+                      etapas[etapaFunil].push({...step, originalIndex: index});
+                    });
+                    
+                    console.log("Etapas agrupadas:", Object.keys(etapas));
+                    
+                    // Definir a ordem das etapas do funil
+                    const ordemEtapas = [
+                      "New - Aguardando Resposta (IA)",
+                      "Conexão - Lead Engajado - Em Qualificação (IA)",
+                      "Qualificado IA",
+                      "Fechamento (IA)",
+                      "Carrinho Abandonado",
+                      "checkout"
+                    ];
+                    
+                    // Ordenar as etapas conforme a ordem definida
+                    const etapasOrdenadas = Object.entries(etapas)
+                      .sort(([etapaA], [etapaB]) => {
+                        const indexA = ordemEtapas.indexOf(etapaA);
+                        const indexB = ordemEtapas.indexOf(etapaB);
+                        
+                        // Se uma etapa não estiver na lista de ordem, colocá-la no final
+                        if (indexA === -1 && indexB === -1) return 0;
+                        if (indexA === -1) return 1;
+                        if (indexB === -1) return -1;
+                        
+                        return indexA - indexB;
+                      });
+                    
+                    console.log("Etapas ordenadas:", etapasOrdenadas.map(([etapa]) => etapa));
+                    
+                    // Renderizar cada etapa do funil com seus estágios
+                    return etapasOrdenadas.map(([etapaFunil, estagios], etapaIndex) => {
+                      // Ordenar os estágios pelo tempo de espera
+                      const estagiosOrdenados = [...estagios].sort((a, b) => {
+                        // Função para extrair minutos de um tempo como "10 minutos", "1 hora", etc.
+                        const extrairMinutos = (tempo : any) => {
+                          if (!tempo) return 0;
+                          
+                          const tempoStr = tempo.toLowerCase();
+                          if (tempoStr.includes('minuto')) {
+                            return parseInt(tempoStr.match(/\d+/)[0]);
+                          } else if (tempoStr.includes('hora')) {
+                            return parseInt(tempoStr.match(/\d+/)[0]) * 60;
+                          } else if (tempoStr.includes('dia')) {
+                            return parseInt(tempoStr.match(/\d+/)[0]) * 24 * 60;
+                          }
+                          return 0;
+                        };
+                        
+                        const minutosA = extrairMinutos(a.tempo_de_espera || a.wait_time);
+                        const minutosB = extrairMinutos(b.tempo_de_espera || b.wait_time);
+                        
+                        return minutosA - minutosB;
+                      });
+                      
+                      return (
+                        <div key={etapaIndex} className="mb-4">
+                          {/* Cabeçalho da Etapa do Funil */}
+                          <div className="px-4 py-3 bg-gray-800 border-l-4 border-orange-500">
+                            <h4 className="text-md font-semibold text-orange-400">
+                              Etapa {etapaIndex + 1}: {etapaFunil}
+                            </h4>
+                          </div>
+                          
+                          {/* Tabela de Estágios para esta Etapa */}
+                          <table className="min-w-full divide-y divide-gray-600">
+                            <thead className="bg-gray-800/50">
+                              <tr>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Estágio</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Tempo de Espera</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Nome do Template</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Mensagem</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-600">
+                              {estagiosOrdenados.map((step, estagioIndex) => {
+                                const originalIndex = step.originalIndex as number;
+                                const isCurrentStep = originalIndex === followUp.current_step;
+                                
+                                return (
+                                  <tr 
+                                    key={estagioIndex} 
+                                    className={`${isCurrentStep ? 'bg-orange-900/30' : ''} hover:bg-gray-600/30`}
+                                  >
+                                    <td className="px-4 py-2 text-sm font-medium text-white">
+                                      {isCurrentStep && (
+                                        <span className="inline-block bg-orange-500 w-2 h-2 rounded-full mr-2"></span>
+                                      )}
+                                      {estagioIndex + 1}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-gray-300">
+                                      {step.tempo_de_espera || step.wait_time}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-purple-400">
+                                      {step.template_name || 'Não definido'}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-gray-300">
+                                      <div className="max-w-md truncate">
+                                        {step.mensagem?.substring(0, 60) || step.message?.substring(0, 60)}
+                                        {(step.mensagem?.length > 60 || step.message?.length > 60) ? '...' : ''}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             ) : (

@@ -79,9 +79,20 @@ async function sendMessageToLumibot(clientId: string, content: string, metadata?
     
     // Verificar se a mensagem contém placeholders como {{1}}
     const hasPlaceholders = content.includes('{{') && content.includes('}}');
+    console.log(`Mensagem contém placeholders: ${hasPlaceholders ? 'SIM' : 'NÃO'}`);
+    
+    // Realizar substituição de placeholders na mensagem para exibição nos logs
+    let processedContent = content;
     
     // Extrair parâmetros processados do metadata ou usar valores padrão
     const processedParams = metadata?.processedParams || metadata?.processed_params || {};
+    const clientName = processedParams["1"] || metadata?.clientName || clientId;
+    
+    // Substituir os placeholders no log para visualização
+    if (hasPlaceholders) {
+      processedContent = content.replace(/\{\{1\}\}/g, clientName);
+      console.log(`Mensagem após substituição de placeholders: "${processedContent}"`);
+    }
     
     // Preparar body base da requisição
     const requestBody: any = {
@@ -96,12 +107,10 @@ async function sendMessageToLumibot(clientId: string, content: string, metadata?
     
     // Adicionar processed_params apenas se a mensagem contiver placeholders
     if (hasPlaceholders) {
-      console.log('Mensagem contém placeholders, adicionando processed_params');
+      console.log('Adicionando processed_params à requisição');
       requestBody.template_params.processed_params = {
-        "1": processedParams["1"] || metadata?.clientName || clientId
+        "1": clientName
       };
-    } else {
-      console.log('Mensagem não contém placeholders, não adicionando processed_params');
     }
     
     // Log do body da requisição
