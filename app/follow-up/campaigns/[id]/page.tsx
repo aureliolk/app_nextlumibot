@@ -171,13 +171,15 @@ export default function EditCampaignPage() {
   const handleAddFunnelStage = async (newStage: Omit<FunnelStage, 'id'>) => {
     setIsLoadingFunnelStage(true);
     try {
-      await followUpService.createFunnelStage(
+      const createdStage = await followUpService.createFunnelStage(
         newStage.name,
         newStage.description,
         newStage.order
       );
       
-      // Atualizar a lista de estágios
+      console.log('Nova etapa criada:', createdStage);
+      
+      // Atualizar apenas a lista de estágios
       const stages = await followUpService.getFunnelStages();
       setFunnelStages(stages);
       
@@ -194,13 +196,15 @@ export default function EditCampaignPage() {
   const handleUpdateFunnelStage = async (stageId: string, updatedStage: Partial<FunnelStage>) => {
     setIsLoadingFunnelStage(true);
     try {
+      console.log(`Atualizando etapa ${stageId}:`, updatedStage);
+      
       await followUpService.updateFunnelStage(stageId, {
         name: updatedStage.name || '',
         description: updatedStage.description,
         order: updatedStage.order
       });
       
-      // Atualizar a lista de estágios
+      // Atualizar apenas a lista de estágios
       const stages = await followUpService.getFunnelStages();
       setFunnelStages(stages);
       
@@ -219,10 +223,16 @@ export default function EditCampaignPage() {
     try {
       await followUpService.deleteFunnelStage(stageId);
       
-      // Atualizar a lista de estágios
-      const stages = await followUpService.getFunnelStages();
-      setFunnelStages(stages);
+      // Atualizar dados diretamente
+      const [stages, steps] = await Promise.all([
+        followUpService.getFunnelStages(),
+        followUpService.getCampaignSteps(campaignId)
+      ]);
       
+      setFunnelStages(stages);
+      setCampaignSteps(steps);
+      
+      console.log('Etapa de funil removida com sucesso, dados atualizados');
       return true;
     } catch (error) {
       console.error('Erro ao remover estágio do funil:', error);
@@ -267,7 +277,7 @@ export default function EditCampaignPage() {
                 // Incluímos todos os passos carregados do servidor para esta campanha
                 steps: campaignSteps.length > 0 
                   ? campaignSteps.map(step => ({
-                      id: step.id,
+                      id: step.id || `step-${Math.random().toString(36).substring(2, 11)}`,
                       stage_id: step.stage_id || '',
                       stage_name: step.etapa || step.stage_name || '',
                       template_name: step.template_name || '',

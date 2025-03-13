@@ -33,7 +33,7 @@ function FunnelStagesTabs({ steps, onRemoveStep, onEditStep }: FunnelStagesTabsP
   const stageGroups = useMemo(() => {
     const groups: Record<string, Step[]> = {};
     
-    // Primeiro, agrupar por etapa
+    // Agrupar por etapa
     steps.forEach(step => {
       const stageName = step.stage_name || 'Sem etapa definida';
       if (!groups[stageName]) {
@@ -67,11 +67,30 @@ function FunnelStagesTabs({ steps, onRemoveStep, onEditStep }: FunnelStagesTabsP
   
   // Encontrar os índices originais dos passos no array de steps
   const getStepIndex = (step: Step) => {
-    return steps.findIndex(s => 
-      s.id === step.id && 
+    console.log('Buscando índice para o passo:', step);
+    
+    // Se tiver um ID, primeiro tenta encontrar só por ID
+    if (step.id) {
+      const indexById = steps.findIndex(s => s.id === step.id);
+      if (indexById !== -1) {
+        console.log(`Passo encontrado pelo ID no índice ${indexById}`);
+        return indexById;
+      }
+    }
+    
+    // Caso contrário, tenta por etapa e nome do template
+    const indexByNameAndTemplate = steps.findIndex(s => 
       s.stage_name === step.stage_name && 
       s.template_name === step.template_name
     );
+    
+    if (indexByNameAndTemplate !== -1) {
+      console.log(`Passo encontrado por nome e template no índice ${indexByNameAndTemplate}`);
+    } else {
+      console.warn('Passo não encontrado em nenhum índice:', step);
+    }
+    
+    return indexByNameAndTemplate;
   };
   
   // Calcular qual estágio está ativo
@@ -261,11 +280,22 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
       
       // Mapear os passos para o formato correto e consistente
       const formattedSteps = initialData.steps.map((step: any) => {
+        // Garantir que todo step tenha um ID único
+        const stepId = step.id || `step-${Math.random().toString(36).substring(2, 11)}`;
+        
         // Se o formato for { stage_name, wait_time, message, template_name }
         if (step.stage_name) {
+          // Verificar se a etapa ainda existe no banco de dados
           const stage = funnelStages.find(s => s.name === step.stage_name);
+          
+          // Se a etapa não existir mais, ignore este estágio
+          if (!stage && step.stage_name !== 'Sem etapa definida') {
+            console.warn(`Ignorando estágio com etapa inexistente: ${step.stage_name}`);
+            return null;
+          }
+          
           return {
-            id: step.id || '',
+            id: stepId,
             stage_id: step.stage_id || stage?.id || '',
             stage_name: step.stage_name,
             template_name: step.template_name || '',
@@ -277,9 +307,17 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
         }
         // Se o formato for { etapa, mensagem, tempo_de_espera, nome_template }
         else if (step.etapa) {
+          // Verificar se a etapa ainda existe no banco de dados
           const stage = funnelStages.find(s => s.name === step.etapa);
+          
+          // Se a etapa não existir mais, ignore este estágio
+          if (!stage && step.etapa !== 'Sem etapa definida') {
+            console.warn(`Ignorando estágio com etapa inexistente: ${step.etapa}`);
+            return null;
+          }
+          
           return {
-            id: step.id || '',
+            id: stepId,
             stage_id: step.stage_id || stage?.id || '',
             stage_name: step.etapa,
             template_name: step.template_name || step.nome_template || '',
@@ -289,8 +327,18 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
             auto_respond: true
           };
         }
-        return step as Step;
-      });
+        
+        // Caso contrário, usar o passo como está, mas garantir o ID
+        const result = {
+          ...step,
+          id: stepId
+        };
+        
+        return result as Step;
+      }).filter(Boolean) as Step[]; // Remove nulos (estágios com etapas que não existem mais)
+      
+      // Log detalhado para depuração
+      console.log('Passos formatados:', formattedSteps);
       
       setSteps(formattedSteps);
     } else if (funnelStages.length > 0) {
@@ -298,6 +346,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
       if (!initialData?.id) {
         console.log('Criando passos de exemplo para nova campanha');
         const defaultSteps = funnelStages.map(stage => ({
+          id: `new-step-${Math.random().toString(36).substring(2, 11)}`,
           stage_id: stage.id,
           stage_name: stage.name,
           template_name: `template_${stage.name.toLowerCase().replace(/\s+/g, '_')}`,
@@ -440,20 +489,27 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
       return;
     }
     
+    // Validar o índice antes de prosseguir
+    if (index < 0 || index >= steps.length) {
+      console.error(`Erro ao remover estágio: índice inválido ${index}`);
+      alert('Índice de estágio inválido');
+      return;
+    }
+    
+    console.log(`Removendo estágio no índice ${index}:`, steps[index]);
     setLoadingStep(true);
-    let success = true;
     
     try {
       // Primeiro, verifica se devemos persistir a remoção no banco de dados
       if (immediateUpdate && onRemoveStep) {
-        success = await onRemoveStep(index, steps[index]);
+        const success = await onRemoveStep(index, steps[index]);
         if (!success) {
           alert('Erro ao remover o estágio no servidor');
-          return;
+          return; // Não atualizar o UI se a operação falhar no servidor
         }
       }
       
-      // Depois atualiza o estado local
+      // Apenas atualiza o estado local se a operação no servidor for bem-sucedida (ou se não for imediata)
       const newSteps = [...steps];
       newSteps.splice(index, 1);
       setSteps(newSteps);
@@ -465,6 +521,8 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
         // Ajustar o índice se removemos um passo antes do que está sendo editado
         setEditingStepIndex(editingStepIndex - 1);
       }
+      
+      console.log('Estágio removido com sucesso, novos estágios:', newSteps.length);
     } catch (error) {
       console.error('Erro ao remover estágio:', error);
       alert('Ocorreu um erro ao remover o estágio');
@@ -542,11 +600,35 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
       return;
     }
     
+    console.log(`Tentando remover etapa do funil com ID: ${stageId}`);
+    
     if (onRemoveFunnelStage) {
       setLoadingFunnelStage(true);
       try {
         const success = await onRemoveFunnelStage(stageId);
-        if (!success) {
+        
+        if (success) {
+          console.log('Etapa do funil removida com sucesso');
+          
+          // Atualizar também a lista de etapas localmente
+          // Remover todos os passos da campanha associados a esta etapa
+          const updatedSteps = steps.filter(step => {
+            const isRelatedToRemovedStage = 
+              step.stage_id === stageId || 
+              (funnelStages.find(s => s.id === stageId)?.name === step.stage_name);
+            
+            if (isRelatedToRemovedStage) {
+              console.log('Removendo passo associado à etapa removida:', step);
+            }
+            
+            return !isRelatedToRemovedStage;
+          });
+          
+          if (updatedSteps.length !== steps.length) {
+            console.log(`Atualizando passos: ${steps.length} -> ${updatedSteps.length}`);
+            setSteps(updatedSteps);
+          }
+        } else {
           alert('Erro ao remover a etapa do funil');
         }
       } catch (error) {
