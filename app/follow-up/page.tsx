@@ -55,113 +55,61 @@ export default function FollowUpPage() {
     }
   };
 
-  // Função para buscar as etapas da campanha
+  // Função para buscar as etapas e estágios do funil
   const fetchCampaignSteps = async (campaignId: string) => {
     try {
-      const response = await axios.get(`/api/follow-up/campaigns/${campaignId}`);
-      if (response.data.success && response.data.data) {
-        // Verificar se steps é uma string ou já é um objeto
-        const stepsData = response.data.data.steps;
-        let parsedSteps = [];
-        
-        if (typeof stepsData === 'string') {
-          try {
-            parsedSteps = JSON.parse(stepsData);
-          } catch (e) {
-            console.error('Erro ao analisar steps:', e);
-            parsedSteps = [];
-          }
-        } else if (Array.isArray(stepsData)) {
-          parsedSteps = stepsData;
-        } else if (typeof stepsData === 'object') {
-          parsedSteps = [stepsData];
-        }
-        
-        // Para debug: mostrar quantas etapas foram carregadas
-        console.log(`Carregadas ${parsedSteps.length} etapas/estágios da campanha`);
-        
-        // Temporariamente, vamos carregar dados reais do CSV como fallback para demonstração
-        if (parsedSteps.length < 3) {
-          console.log('Poucos estágios encontrados, carregando dados de exemplo do CSV para demonstração');
-          
-          // Dados de exemplo baseados no CSV para teste da UI
-          const dadosExemplo = [
-            { 
-              etapa: "New - Aguardando Resposta (IA)",
-              tempo_de_espera: "10 minutos",
-              template_name: "novo_lead_10min",
-              message: "Ei, Boss! 🚀 Vi que você recebeu a mensagem, mas ainda não respondeu. Quer tirar alguma dúvida antes de começarmos?"
-            },
-            { 
-              etapa: "New - Aguardando Resposta (IA)",
-              tempo_de_espera: "30 minutos",
-              template_name: "novo_lead_30min",
-              message: "Oi! Percebi que seu atendimento ainda está em andamento. Sei que a rotina pode ser corrida, então estou por aqui caso precise retomar a conversa ou tirar alguma dúvida!"
-            },
-            { 
-              etapa: "New - Aguardando Resposta (IA)",
-              tempo_de_espera: "1 hora",
-              template_name: "novo_lead_1h",
-              message: "Olá! Você iniciou um contato conosco recentemente e queremos garantir que você receba todas as informações possíveis. Caso precise de suporte ou tenha dúvidas sobre seu atendimento, estou por aqui."
-            },
-            { 
-              etapa: "New - Aguardando Resposta (IA)",
-              tempo_de_espera: "24 horas",
-              template_name: "novo_lead_24h",
-              message: "Ei, Boss! Vi que você ainda não respondeu... Tá tudo certo por aí? Se tiver dúvidas, me avisa! Estou aqui para te ajudar."
-            },
-            { 
-              etapa: "New - Aguardando Resposta (IA)",
-              tempo_de_espera: "48 horas",
-              template_name: "novo_lead_48h",
-              message: "Oi! Notamos que sua conversa conosco ainda está aberta. Caso precise de mais informações, você pode acessar os detalhes aqui: https://bit.ly/conteudoparalojas_inteligente"
-            },
-            { 
-              etapa: "Conexão - Lead Engajado - Em Qualificação (IA)",
-              tempo_de_espera: "10 minutos",
-              template_name: "qualificacao_10min",
-              message: "Oi! Vi que você iniciou um processo conosco, mas ainda não concluímos sua qualificação. Caso precise de mais informações ou queira continuar, estou à disposição para te ajudar!"
-            },
-            { 
-              etapa: "Conexão - Lead Engajado - Em Qualificação (IA)",
-              tempo_de_espera: "1 hora",
-              template_name: "qualificacao_1h",
-              message: "Boss! Para te ajudar com mais informações, preparamos um vídeo explicativo sobre como funciona. Você pode assistir aqui: https://www.youtube.com/watch?v=XXcaQZY0udI&t=1s"
-            },
-            { 
-              etapa: "Qualificado IA",
-              tempo_de_espera: "1 hora",
-              template_name: "qualificado_1h",
-              message: "Ótimo! Já temos todas as informações necessárias para prosseguir. Nosso especialista entrará em contato em breve para discutir as próximas etapas."
-            },
-            { 
-              etapa: "Fechamento (IA)",
-              tempo_de_espera: "24 horas",
-              template_name: "fechamento_24h",
-              message: "Estamos finalizando os detalhes do seu caso. Tem alguma dúvida de última hora antes de concluirmos?"
-            }
-          ];
-          
-          // Mesclar os dados existentes com os dados de exemplo
-          if (parsedSteps.length > 0) {
-            // Se já existem alguns dados, apenas complementamos
-            parsedSteps = [...parsedSteps, ...dadosExemplo.filter(d => 
-              !parsedSteps.some(p => 
-                p.template_name === d.template_name && p.etapa === d.etapa
-              )
-            )];
-          } else {
-            // Se não há dados, usamos os exemplos
-            parsedSteps = dadosExemplo;
-          }
-          
-          console.log(`Agora temos ${parsedSteps.length} etapas/estágios para visualização`);
-        }
-        
-        setCampaignSteps(parsedSteps);
+      setIsLoading(true);
+      
+      console.log('Buscando etapas e estágios para a campanha:', campaignId);
+      
+      // 1. Primeiro, buscar todas as etapas do funil
+      const stagesResponse = await axios.get('/api/follow-up/funnel-stages');
+      
+      if (!stagesResponse.data.success) {
+        console.error('Erro ao buscar etapas do funil:', stagesResponse.data.error);
+        return;
       }
+      
+      const funnelStages = stagesResponse.data.data || [];
+      console.log(`Encontradas ${funnelStages.length} etapas do funil`);
+      
+      // 2. Para cada etapa, buscar os passos associados
+      const allSteps = [];
+      
+      for (const stage of funnelStages) {
+        try {
+          const stepsResponse = await axios.get(`/api/follow-up/funnel-steps?stageId=${stage.id}`);
+          
+          if (stepsResponse.data.success) {
+            const steps = stepsResponse.data.data || [];
+            
+            // Mapear os passos para o formato esperado pelo componente FollowUpDetailModal
+            const formattedSteps = steps.map(step => ({
+              id: step.id,
+              etapa: stage.name, // Nome da etapa do funil
+              tempo_de_espera: step.wait_time,
+              template_name: step.template_name,
+              message: step.message_content,
+              stage_id: stage.id,
+              stage_name: stage.name,
+              stage_order: stage.order
+            }));
+            
+            allSteps.push(...formattedSteps);
+            console.log(`Adicionados ${formattedSteps.length} estágios para a etapa "${stage.name}"`);
+          }
+        } catch (error) {
+          console.error(`Erro ao buscar estágios para a etapa ${stage.name}:`, error);
+        }
+      }
+      
+      console.log(`Total de ${allSteps.length} estágios encontrados para todas as etapas`);
+      setCampaignSteps(allSteps);
+      
     } catch (err) {
-      console.error('Erro ao buscar etapas da campanha:', err);
+      console.error('Erro ao buscar etapas e estágios do funil:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 

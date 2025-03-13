@@ -158,19 +158,29 @@ export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
                     
                     console.log("Etapas agrupadas:", Object.keys(etapas));
                     
-                    // Definir a ordem das etapas do funil
+                    // Ordenar as etapas pela propriedade stage_order se disponível
+                    // Caso contrário, usar uma ordem predefinida como fallback
                     const ordemEtapas = [
                       "New - Aguardando Resposta (IA)",
                       "Conexão - Lead Engajado - Em Qualificação (IA)",
                       "Qualificado IA",
                       "Fechamento (IA)",
                       "Carrinho Abandonado",
-                      "checkout"
+                      "Checkout"
                     ];
                     
-                    // Ordenar as etapas conforme a ordem definida
+                    // Ordenar as etapas conforme a ordem definida ou pelo stage_order
                     const etapasOrdenadas = Object.entries(etapas)
-                      .sort(([etapaA], [etapaB]) => {
+                      .sort(([etapaA, stepsA], [etapaB, stepsB]) => {
+                        // Primeiro tentar ordenar pelo stage_order se disponível
+                        const stepWithOrderA = stepsA.find(s => s.stage_order !== undefined);
+                        const stepWithOrderB = stepsB.find(s => s.stage_order !== undefined);
+                        
+                        if (stepWithOrderA && stepWithOrderB) {
+                          return stepWithOrderA.stage_order - stepWithOrderB.stage_order;
+                        }
+                        
+                        // Fallback para a ordem predefinida se stage_order não estiver disponível
                         const indexA = ordemEtapas.indexOf(etapaA);
                         const indexB = ordemEtapas.indexOf(etapaB);
                         
