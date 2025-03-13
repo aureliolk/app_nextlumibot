@@ -1,12 +1,14 @@
 // app/follow-up/_components/FollowUpDetailModal.tsx
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import axios from 'axios';
 import { FollowUp } from './FollowUpTable';
 
 interface FollowUpDetailModalProps {
   followUp: FollowUp | null;
-  campaignSteps: any[];
+  campaignSteps?: any[];
+  campaignId?: string;
   onClose: () => void;
   onCancel: (id: string) => void;
   onResume?: (id: string) => void;
@@ -17,17 +19,137 @@ interface FollowUpDetailModalProps {
 
 export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
   followUp,
-  campaignSteps,
+  campaignSteps: externalCampaignSteps,
+  campaignId,
   onClose,
   onCancel,
   onResume,
   onAdvance,
   onRemoveClient,
-  isLoading = false
+  isLoading: externalIsLoading = false
 }) => {
+  const [internalCampaignSteps, setInternalCampaignSteps] = useState<any[]>([]);
+  const [internalIsLoading, setInternalIsLoading] = useState(false);
+
+  // Use either external or internal campaign steps
+  const campaignSteps = externalCampaignSteps || internalCampaignSteps;
+  const isLoading = externalIsLoading || internalIsLoading;
+
+  useEffect(() => {
+    // Only fetch campaign steps if they're not provided externally and we have a followUp
+    if (!externalCampaignSteps && followUp) {
+      fetchCampaignSteps(followUp.campaign_id);
+    }
+  }, [followUp, externalCampaignSteps]);
+
+  // Function to fetch campaign steps if not provided externally
+  const fetchCampaignSteps = async (campaignId: string) => {
+    try {
+      setInternalIsLoading(true);
+      
+      // 1. First, fetch all funnel stages
+      const stagesResponse = await axios.get('/api/follow-up/funnel-stages');
+      
+      if (!stagesResponse.data.success) {
+        console.error('Error fetching funnel stages:', stagesResponse.data.error);
+        return;
+      }
+      
+      const funnelStages = stagesResponse.data.data || [];
+      
+      // 2. For each stage, fetch associated steps
+      const allSteps = [];
+      
+      for (const stage of funnelStages) {
+        try {
+          const stepsResponse = await axios.get(`/api/follow-up/funnel-steps?stageId=${stage.id}`);
+          
+          if (stepsResponse.data.success) {
+            const steps = stepsResponse.data.data || [];
+            
+            // Map steps to expected format
+            const formattedSteps = steps.map((step: any) => ({
+              id: step.id,
+              etapa: stage.name,
+              tempo_de_espera: step.wait_time,
+              template_name: step.template_name,
+              message: step.message_content,
+              stage_id: stage.id,
+              stage_name: stage.name,
+              stage_order: stage.order
+            }));
+            
+            allSteps.push(...formattedSteps);
+          }
+        } catch (error) {
+          console.error(`Error fetching steps for stage ${stage.name}:`, error);
+        }
+      }
+      
+      // 3. If no steps found in the database, fetch campaign data
+      if (allSteps.length === 0) {
+        try {
+          const campaignResponse = await axios.get(`/api/follow-up/campaigns/${campaignId}`);
+          
+          if (campaignResponse.data.success && campaignResponse.data.data) {
+            let campaignSteps = [];
+            
+            // Convert steps from string to object if needed
+            if (typeof campaignResponse.data.data.steps === 'string') {
+              try {
+                campaignSteps = JSON.parse(campaignResponse.data.data.steps);
+              } catch (e) {
+                console.error('Error parsing campaign steps:', e);
+              }
+            } else if (Array.isArray(campaignResponse.data.data.steps)) {
+              campaignSteps = campaignResponse.data.data.steps;
+            }
+            
+            // Map to expected format
+            const formattedCampaignSteps = campaignSteps.map((step: any, index: number) => {
+              if (step.stage_name) {
+                return {
+                  id: `campaign-step-${index}`,
+                  etapa: step.stage_name,
+                  tempo_de_espera: step.wait_time || '',
+                  template_name: step.template_name || '',
+                  message: step.message || '',
+                  stage_name: step.stage_name
+                };
+              } else if (step.etapa) {
+                return {
+                  id: `campaign-step-${index}`,
+                  etapa: step.etapa,
+                  tempo_de_espera: step.tempo_de_espera || '',
+                  template_name: step.nome_template || '',
+                  message: step.mensagem || '',
+                  stage_name: step.etapa
+                };
+              }
+              return null;
+            }).filter(Boolean);
+            
+            if (formattedCampaignSteps.length > 0) {
+              allSteps.push(...formattedCampaignSteps);
+            }
+          }
+        } catch (campaignError) {
+          console.error('Error fetching campaign data:', campaignError);
+        }
+      }
+      
+      setInternalCampaignSteps(allSteps);
+      
+    } catch (err) {
+      console.error('Error fetching funnel stages and steps:', err);
+    } finally {
+      setInternalIsLoading(false);
+    }
+  };
+
   if (!followUp) return null;
 
-  // Agrupar mensagens por estágio do funil
+  // Group messages by funnel stage
   const messagesByStage = useMemo(() => {
     if (!followUp.messages) return {};
     
@@ -234,6 +356,7 @@ export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Tempo de Espera</th>
                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Nome do Template</th>
                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Mensagem</th>
+                                {campaignId && <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Ações</th>}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-600">
@@ -264,6 +387,26 @@ export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
                                         {(step.mensagem?.length > 60 || step.message?.length > 60) ? '...' : ''}
                                       </div>
                                     </td>
+                                    {campaignId && (
+                                      <td className="px-4 py-2 text-sm flex space-x-2">
+                                        <button
+                                          className="text-blue-400 hover:text-blue-300"
+                                          onClick={() => alert('Editar estágio (a implementar)')}
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                          </svg>
+                                        </button>
+                                        <button
+                                          className="text-red-400 hover:text-red-300"
+                                          onClick={() => alert('Remover estágio (a implementar)')}
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                          </svg>
+                                        </button>
+                                      </td>
+                                    )}
                                   </tr>
                                 );
                               })}
@@ -363,40 +506,52 @@ export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
             {followUp.status === 'paused' && onResume && (
               <button 
                 onClick={() => onResume(followUp.id)}
-                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center"
               >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                </svg>
                 Retomar
               </button>
             )}
             {followUp.status === 'active' && onAdvance && (
               <button 
                 onClick={() => onAdvance(followUp.id)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center"
               >
-                Avançar para Próxima Etapa
-              </button>
-            )}
-            {followUp.status === 'active' && (
-              <button
-                onClick={() => onCancel(followUp.id)}
-                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
-              >
-                Cancelar Follow-up
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+                Avançar
               </button>
             )}
             {onRemoveClient && (
               <button
                 onClick={() => onRemoveClient(followUp.client_id)}
-                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center"
               >
-                Remover Cliente
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </button>
+            )}
+            {followUp.status === 'active' && (
+              <button
+                onClick={() => onCancel(followUp.id)}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors flex items-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
               </button>
             )}
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors flex items-center"
             >
-              Fechar
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
+              </svg>
             </button>
           </div>
         </div>

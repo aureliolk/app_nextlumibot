@@ -47,7 +47,7 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
 }) => {
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
-  const [steps, setSteps] = useState<Step[]>(initialData?.steps || []);
+  const [steps, setSteps] = useState<Step[]>([]);
   const [selectedStage, setSelectedStage] = useState<string>('');
   
   // Formulário para adicionar nova etapa
@@ -74,50 +74,107 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
     }
   }, [newStep.stage_id, funnelStages]);
   
-  // Carregar estágios do funil ao iniciar
+  // Carregar estágios do funil e dados da campanha ao iniciar
   useEffect(() => {
     const initForm = async () => {
       try {
-        if (initialData?.steps && Array.isArray(initialData.steps)) {
-          // Se já tiver etapas iniciais, mapear para o formato correto se necessário
-          const formattedSteps = initialData.steps.map(step => {
-            // Se o formato for { stage_name, wait_time, message, template_name }
-            if (step.stage_name) {
-              const stage = funnelStages.find(s => s.name === step.stage_name);
-              return {
-                stage_id: stage?.id || '',
-                stage_name: step.stage_name,
-                template_name: step.template_name || '',
-                wait_time: step.wait_time || '',
-                message: step.message || '',
-                category: step.category || 'Utility',
-                auto_respond: step.auto_respond !== undefined ? step.auto_respond : true
-              };
+        // Carregar os passos do banco de dados em vez das etapas da campanha
+        const fetchFunnelData = async () => {
+          try {
+            // Buscar todos os passos de todos os estágios de uma vez só
+            const formattedSteps: Step[] = [];
+            
+            // Buscar da nova API que retorna todas as etapas e passos
+            const response = await fetch('/api/follow-up/campaigns/funnel-steps');
+            const data = await response.json();
+            
+            if (data.success && Array.isArray(data.data)) {
+              console.log(`Encontrados ${data.data.length} passos no banco de dados`);
+              
+              // Mapear os passos para o formato esperado
+              formattedSteps.push(
+                ...data.data.map(step => ({
+                  id: step.id,
+                  stage_id: step.funnel_stage_id,
+                  stage_name: step.stage_name,
+                  template_name: step.template_name,
+                  wait_time: step.wait_time,
+                  message: step.message_content,
+                  category: step.message_category || 'Utility',
+                  auto_respond: step.auto_respond
+                }))
+              );
+            } else {
+              console.log('Nenhum passo encontrado ou erro na API');
+              
+              // Fallback: criar um passo por estágio
+              for (const stage of funnelStages) {
+                formattedSteps.push({
+                  stage_id: stage.id,
+                  stage_name: stage.name,
+                  template_name: `template_${stage.name.toLowerCase().replace(/\s+/g, '_')}`,
+                  wait_time: '30 minutos',
+                  message: `Mensagem padrão para o estágio ${stage.name}`,
+                  category: 'Utility',
+                  auto_respond: true
+                });
+              }
             }
-            // Se o formato for { etapa, mensagem, tempo_de_espera, nome_template }
-            else if (step.etapa) {
-              const stage = funnelStages.find(s => s.name === step.etapa);
-              return {
-                stage_id: stage?.id || '',
-                stage_name: step.etapa,
-                template_name: step.nome_template || '',
-                wait_time: step.tempo_de_espera || '',
-                message: step.mensagem || '',
-                category: step.categoria || 'Utility',
-                auto_respond: step.resposta_automatica === 'Sim'
-              };
+            
+            // Mesclar com os passos da campanha inicial, se existirem
+            if (initialData?.steps && Array.isArray(initialData.steps)) {
+              // Se já tiver etapas iniciais, mapear para o formato correto
+              const campaignSteps = initialData.steps.map(step => {
+                // Se o formato for { stage_name, wait_time, message, template_name }
+                if (step.stage_name) {
+                  const stage = funnelStages.find(s => s.name === step.stage_name);
+                  return {
+                    stage_id: stage?.id || '',
+                    stage_name: step.stage_name,
+                    template_name: step.template_name || '',
+                    wait_time: step.wait_time || '',
+                    message: step.message || '',
+                    category: step.category || 'Utility',
+                    auto_respond: step.auto_respond !== undefined ? step.auto_respond : true
+                  };
+                }
+                // Se o formato for { etapa, mensagem, tempo_de_espera, nome_template }
+                else if (step.etapa) {
+                  const stage = funnelStages.find(s => s.name === step.etapa);
+                  return {
+                    stage_id: stage?.id || '',
+                    stage_name: step.etapa,
+                    template_name: step.nome_template || '',
+                    wait_time: step.tempo_de_espera || '',
+                    message: step.mensagem || '',
+                    category: step.categoria || 'Utility',
+                    auto_respond: step.resposta_automatica === 'Sim'
+                  };
+                }
+                return step;
+              });
+              
+              // Preferir os passos da campanha inicial se existirem
+              formattedSteps.push(...campaignSteps);
             }
-            return step;
-          });
-          
-          setSteps(formattedSteps);
-        }
+            
+            console.log(`Total de ${formattedSteps.length} passos encontrados`);
+            setSteps(formattedSteps);
+          } catch (error) {
+            console.error('Erro ao buscar dados do funil:', error);
+          }
+        };
+        
+        // Executar a busca
+        await fetchFunnelData();
       } catch (error) {
         console.error('Erro ao inicializar formulário:', error);
       }
     };
     
-    initForm();
+    if (funnelStages.length > 0) {
+      initForm();
+    }
   }, [initialData, funnelStages]);
   
   const handleAddStep = () => {

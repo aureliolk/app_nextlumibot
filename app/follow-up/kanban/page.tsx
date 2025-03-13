@@ -1,3 +1,4 @@
+// app/follow-up/kanban/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -19,7 +20,6 @@ export default function KanbanPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFollowUp, setSelectedFollowUp] = useState<FollowUp | null>(null);
-  const [campaignSteps, setCampaignSteps] = useState<any[]>([]);
 
   // Carregar follow-ups e estágios do funil
   useEffect(() => {
@@ -52,41 +52,7 @@ export default function KanbanPage() {
     fetchData();
   }, []);
 
-  // Carregar etapas da campanha para o modal de detalhes
-  useEffect(() => {
-    if (selectedFollowUp) {
-      const fetchCampaignSteps = async () => {
-        try {
-          const response = await axios.get(`/api/follow-up/campaigns/${selectedFollowUp.campaign_id}`);
-          if (response.data.success && response.data.data) {
-            // Verificar se steps é uma string ou já é um objeto
-            const stepsData = response.data.data.steps;
-            let parsedSteps = [];
-            
-            if (typeof stepsData === 'string') {
-              try {
-                parsedSteps = JSON.parse(stepsData);
-              } catch (e) {
-                console.error('Erro ao analisar steps:', e);
-                parsedSteps = [];
-              }
-            } else if (Array.isArray(stepsData)) {
-              parsedSteps = stepsData;
-            } else if (typeof stepsData === 'object') {
-              parsedSteps = [stepsData];
-            }
-            
-            console.log('Etapas da campanha carregadas:', parsedSteps);
-            setCampaignSteps(parsedSteps);
-          }
-        } catch (err) {
-          console.error('Erro ao carregar etapas da campanha:', err);
-        }
-      };
-
-      fetchCampaignSteps();
-    }
-  }, [selectedFollowUp]);
+  // We don't need to fetch campaign steps anymore - the component will handle this
 
   // Filtrar follow-ups por termo de busca
   const filteredFollowUps = followUps.filter(followUp => {
@@ -204,7 +170,6 @@ export default function KanbanPage() {
       {selectedFollowUp && (
         <FollowUpDetailModal 
           followUp={selectedFollowUp} 
-          campaignSteps={campaignSteps}
           onClose={() => setSelectedFollowUp(null)} 
           onCancel={handleCancelFollowUp} 
         />

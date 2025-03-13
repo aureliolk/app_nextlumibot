@@ -29,7 +29,6 @@ export default function FollowUpPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewForm, setShowNewForm] = useState(false);
-  const [campaignSteps, setCampaignSteps] = useState<CampaignStep[]>([]);
 
   // Função para carregar os follow-ups
   const fetchFollowUps = async () => {
@@ -56,119 +55,7 @@ export default function FollowUpPage() {
     }
   };
 
-  // Função para buscar as etapas e estágios do funil
-  const fetchCampaignSteps = async (campaignId: string) => {
-    try {
-      setIsLoading(true);
-      
-      console.log('Buscando etapas e estágios para a campanha:', campaignId);
-      
-      // 1. Primeiro, buscar todas as etapas do funil
-      const stagesResponse = await axios.get('/api/follow-up/funnel-stages');
-      
-      if (!stagesResponse.data.success) {
-        console.error('Erro ao buscar etapas do funil:', stagesResponse.data.error);
-        return;
-      }
-      
-      const funnelStages = stagesResponse.data.data || [];
-      console.log(`Encontradas ${funnelStages.length} etapas do funil`);
-      
-      // 2. Para cada etapa, buscar os passos associados
-      const allSteps = [];
-      
-      for (const stage of funnelStages) {
-        try {
-          const stepsResponse = await axios.get(`/api/follow-up/funnel-steps?stageId=${stage.id}`);
-          
-          if (stepsResponse.data.success) {
-            const steps = stepsResponse.data.data || [];
-            
-            // Mapear os passos para o formato esperado pelo componente FollowUpDetailModal
-            const formattedSteps = steps.map((step: any) => ({
-              id: step.id,
-              etapa: stage.name, // Nome da etapa do funil
-              tempo_de_espera: step.wait_time,
-              template_name: step.template_name,
-              message: step.message_content,
-              stage_id: stage.id,
-              stage_name: stage.name,
-              stage_order: stage.order
-            }));
-            
-            allSteps.push(...formattedSteps);
-            console.log(`Adicionados ${formattedSteps.length} estágios para a etapa "${stage.name}"`);
-          }
-        } catch (error) {
-          console.error(`Erro ao buscar estágios para a etapa ${stage.name}:`, error);
-        }
-      }
-      
-      console.log(`Total de ${allSteps.length} estágios encontrados para todas as etapas`);
-      
-      // 3. Se não foram encontrados passos no banco de dados, buscar dados da campanha
-      if (allSteps.length === 0) {
-        console.log('Nenhum estágio encontrado no banco de dados, buscando dados da campanha');
-        
-        try {
-          const campaignResponse = await axios.get(`/api/follow-up/campaigns/${campaignId}`);
-          
-          if (campaignResponse.data.success && campaignResponse.data.data) {
-            let campaignSteps = [];
-            
-            // Converter steps de string para objeto se necessário
-            if (typeof campaignResponse.data.data.steps === 'string') {
-              try {
-                campaignSteps = JSON.parse(campaignResponse.data.data.steps);
-              } catch (e) {
-                console.error('Erro ao analisar steps da campanha:', e);
-              }
-            } else if (Array.isArray(campaignResponse.data.data.steps)) {
-              campaignSteps = campaignResponse.data.data.steps;
-            }
-            
-            // Mapear para o formato esperado
-            const formattedCampaignSteps = campaignSteps.map((step: any, index: number) => {
-              if (step.stage_name) {
-                return {
-                  id: `campaign-step-${index}`,
-                  etapa: step.stage_name,
-                  tempo_de_espera: step.wait_time || '',
-                  template_name: step.template_name || '',
-                  message: step.message || '',
-                  stage_name: step.stage_name
-                };
-              } else if (step.etapa) {
-                return {
-                  id: `campaign-step-${index}`,
-                  etapa: step.etapa,
-                  tempo_de_espera: step.tempo_de_espera || '',
-                  template_name: step.nome_template || '',
-                  message: step.mensagem || '',
-                  stage_name: step.etapa
-                };
-              }
-              return null;
-            }).filter(Boolean);
-            
-            if (formattedCampaignSteps.length > 0) {
-              console.log(`Adicionados ${formattedCampaignSteps.length} passos da própria campanha`);
-              allSteps.push(...formattedCampaignSteps);
-            }
-          }
-        } catch (campaignError) {
-          console.error('Erro ao buscar dados da campanha:', campaignError);
-        }
-      }
-      
-      setCampaignSteps(allSteps);
-      
-    } catch (err) {
-      console.error('Erro ao buscar etapas e estágios do funil:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // We don't need to fetch campaign steps anymore - the component will handle this
 
   // Buscar dados ao carregar a página e quando a tab muda
   useEffect(() => {
@@ -176,12 +63,7 @@ export default function FollowUpPage() {
     fetchCampaigns();
   }, [activeTab]);
   
-  // Quando um follow-up é selecionado, buscar as etapas da campanha
-  useEffect(() => {
-    if (selectedFollowUp) {
-      fetchCampaignSteps(selectedFollowUp.campaign_id);
-    }
-  }, [selectedFollowUp]);
+  // We don't need this anymore since the component handles fetching campaign steps
 
   // Filtrar follow-ups pelo termo de busca
   const filteredFollowUps = followUps.filter(followUp => 
@@ -298,11 +180,9 @@ export default function FollowUpPage() {
             {selectedFollowUp && (
               <FollowUpDetailModal 
                 followUp={selectedFollowUp}
-                campaignSteps={campaignSteps}
                 onClose={() => setSelectedFollowUp(null)}
                 onCancel={handleCancelFollowUp}
                 onRemoveClient={handleRemoveClient}
-                isLoading={isLoading}
               />
             )}
 

@@ -1,329 +1,15 @@
+// app/follow-up/campaigns/[id]/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useRouter } from 'next/navigation';
-import { ErrorMessage, Footer } from '../../_components';
+import { ErrorMessage, Footer, FollowUpDetailModal } from '../../_components';
 import MainNavigation from '../../_components/MainNavigation';
 import { CampaignForm } from '../../_components';
 import Link from 'next/link';
 
-// Componente para painel de etapas/estágios
-interface StageTabProps {
-  campaignId: string;
-  onRefresh: () => void;
-}
-
-const StageTab: React.FC<StageTabProps> = ({ campaignId, onRefresh }) => {
-  const [stages, setStages] = useState<any[]>([]);
-  const [steps, setSteps] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedStage, setSelectedStage] = useState<string | null>(null);
-  const [isAddingStep, setIsAddingStep] = useState(false);
-  
-  // Formulário para novo passo
-  const [formData, setFormData] = useState({
-    name: '',
-    template_name: '',
-    wait_time: '30 minutos',
-    message_content: '',
-    message_category: 'Utility',
-    auto_respond: true
-  });
-  
-  // Buscar estágios e passos
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      // Buscar estágios do funil
-      const stagesRes = await axios.get('/api/follow-up/funnel-stages');
-      if (stagesRes.data.success) {
-        setStages(stagesRes.data.data);
-        
-        // Se há estágios e nenhum está selecionado, selecionar o primeiro
-        if (stagesRes.data.data.length > 0 && !selectedStage) {
-          setSelectedStage(stagesRes.data.data[0].id);
-        }
-      }
-      
-      // Se um estágio estiver selecionado, buscar seus passos
-      if (selectedStage) {
-        const stepsRes = await axios.get(`/api/follow-up/funnel-steps?stageId=${selectedStage}`);
-        if (stepsRes.data.success) {
-          setSteps(stepsRes.data.data);
-        }
-      }
-    } catch (err: any) {
-      console.error('Erro ao carregar dados:', err);
-      setError(err.response?.data?.error || 'Erro ao carregar dados');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  // Carregar dados quando o componente montar ou o estágio selecionado mudar
-  useEffect(() => {
-    fetchData();
-  }, [selectedStage]);
-  
-  // Função para adicionar um novo passo ao estágio
-  const handleAddStep = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!selectedStage) {
-      setError("Nenhum estágio selecionado");
-      return;
-    }
-    
-    try {
-      setIsLoading(true);
-      
-      const payload = {
-        funnel_stage_id: selectedStage,
-        name: formData.name,
-        template_name: formData.template_name,
-        wait_time: formData.wait_time,
-        message_content: formData.message_content,
-        message_category: formData.message_category,
-        auto_respond: formData.auto_respond
-      };
-      
-      const response = await axios.post('/api/follow-up/funnel-steps', payload);
-      
-      if (response.data.success) {
-        // Limpar o formulário
-        setFormData({
-          name: '',
-          template_name: '',
-          wait_time: '30 minutos',
-          message_content: '',
-          message_category: 'Utility',
-          auto_respond: true
-        });
-        
-        // Recarregar os passos
-        fetchData();
-        onRefresh();
-        setIsAddingStep(false);
-      }
-    } catch (err: any) {
-      console.error('Erro ao adicionar passo:', err);
-      setError(err.response?.data?.error || 'Erro ao adicionar passo');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-  
-  return (
-    <div className="bg-gray-800 rounded-lg p-6">
-      <h2 className="text-xl font-semibold text-white mb-4">
-        Etapas e Estágios do Funil
-      </h2>
-      
-      {error && <ErrorMessage message={error} onClose={() => setError(null)} className="mb-4" />}
-      
-      {/* Seleção de estágio do funil */}
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-medium text-white">Estágios do Funil</h3>
-        </div>
-        
-        <div className="flex flex-wrap gap-2 mb-4">
-          {stages.map(stage => (
-            <button
-              key={stage.id}
-              onClick={() => setSelectedStage(stage.id)}
-              className={`px-3 py-2 rounded-md ${
-                selectedStage === stage.id 
-                  ? 'bg-orange-600 text-white'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              {stage.name}
-            </button>
-          ))}
-        </div>
-        
-        {selectedStage && (
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-white">
-                Estágios em {stages.find(s => s.id === selectedStage)?.name}
-              </h3>
-              
-              <button
-                onClick={() => setIsAddingStep(!isAddingStep)}
-                className="px-3 py-1 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors"
-              >
-                {isAddingStep ? 'Cancelar' : 'Adicionar Estágio'}
-              </button>
-            </div>
-            
-            {isAddingStep && (
-              <div className="bg-gray-700 p-4 rounded-lg mb-4">
-                <h4 className="text-md font-medium text-white mb-3">Novo Estágio</h4>
-                
-                <form onSubmit={handleAddStep} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">
-                        Nome do Estágio *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => setFormData({...formData, name: e.target.value})}
-                        className="w-full px-3 py-2 bg-gray-600 text-white rounded-md border border-gray-500"
-                        placeholder="Ex: Primeiro contato"
-                        required
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">
-                        Nome do Template *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.template_name}
-                        onChange={(e) => setFormData({...formData, template_name: e.target.value})}
-                        className="w-full px-3 py-2 bg-gray-600 text-white rounded-md border border-gray-500"
-                        placeholder="Ex: primeiro_contato_10min"
-                        required
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">
-                        Tempo de Espera *
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.wait_time}
-                        onChange={(e) => setFormData({...formData, wait_time: e.target.value})}
-                        className="w-full px-3 py-2 bg-gray-600 text-white rounded-md border border-gray-500"
-                        placeholder="Ex: 10 minutos, 1 hora, 1 dia"
-                        required
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-1">
-                        Categoria
-                      </label>
-                      <select
-                        value={formData.message_category}
-                        onChange={(e) => setFormData({...formData, message_category: e.target.value})}
-                        className="w-full px-3 py-2 bg-gray-600 text-white rounded-md border border-gray-500"
-                      >
-                        <option value="Utility">Utilitário</option>
-                        <option value="Marketing">Marketing</option>
-                        <option value="Onboarding">Onboarding</option>
-                        <option value="Support">Suporte</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-1">
-                      Conteúdo da Mensagem *
-                    </label>
-                    <textarea
-                      value={formData.message_content}
-                      onChange={(e) => setFormData({...formData, message_content: e.target.value})}
-                      className="w-full px-3 py-2 bg-gray-600 text-white rounded-md border border-gray-500"
-                      placeholder="Digite o conteúdo da mensagem..."
-                      rows={4}
-                      required
-                    />
-                  </div>
-                  
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id="auto-respond"
-                      checked={formData.auto_respond}
-                      onChange={(e) => setFormData({...formData, auto_respond: e.target.checked})}
-                      className="mr-2"
-                    />
-                    <label htmlFor="auto-respond" className="text-sm text-gray-300">
-                      Resposta automática
-                    </label>
-                  </div>
-                  
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={isLoading}
-                      className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                    >
-                      {isLoading ? 'Salvando...' : 'Salvar Estágio'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-            
-            {/* Lista de estágios */}
-            {steps.length > 0 ? (
-              <div className="bg-gray-700 rounded-lg overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-600">
-                  <thead className="bg-gray-800/50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Nome</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Template</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Tempo</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Mensagem</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-600">
-                    {steps.map((step) => (
-                      <tr key={step.id} className="hover:bg-gray-600/30">
-                        <td className="px-4 py-2 text-sm text-white">{step.name}</td>
-                        <td className="px-4 py-2 text-sm text-purple-400">{step.template_name}</td>
-                        <td className="px-4 py-2 text-sm text-gray-300">{step.wait_time}</td>
-                        <td className="px-4 py-2 text-sm text-gray-300">
-                          <div className="max-w-xs truncate">
-                            {step.message_content.substring(0, 50)}
-                            {step.message_content.length > 50 ? '...' : ''}
-                          </div>
-                        </td>
-                        <td className="px-4 py-2 text-sm text-gray-300">
-                          <button
-                            className="text-blue-400 hover:text-blue-300 mr-2"
-                            onClick={() => alert('Editar estágio (a implementar)')}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            className="text-red-400 hover:text-red-300"
-                            onClick={() => alert('Remover estágio (a implementar)')}
-                          >
-                            Remover
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="bg-gray-700 p-4 rounded-lg text-center">
-                <p className="text-gray-400">
-                  {isLoading 
-                    ? 'Carregando estágios...' 
-                    : 'Nenhum estágio encontrado para este estágio do funil.'}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+// Removido o componente StageTab, usando FollowUpDetailModal em seu lugar
 
 // Componente principal de edição de campanha
 export default function EditCampaignPage() {
@@ -456,10 +142,53 @@ export default function EditCampaignPage() {
                 isLoading={isSubmitting}
               />
             ) : (
-              <StageTab 
-                campaignId={campaignId} 
-                onRefresh={fetchData}
-              />
+              <div>
+                <h3 className="text-lg font-medium text-white mb-4">Visualização e Gerenciamento das Etapas do Funil</h3>
+                {campaign ? (
+                  <div className="bg-gray-800 rounded-lg overflow-hidden">
+                    <FollowUpDetailModal 
+                      followUp={{
+                        ...campaign,
+                        id: campaignId,
+                        client_id: 'Preview', // Mock data for preview
+                        campaign: { 
+                          id: campaignId, 
+                          name: campaign.name 
+                        },
+                        campaign_id: campaignId,
+                        current_step: 0,
+                        current_stage_id: campaign.default_stage_id || '',
+                        current_stage_name: funnelStages.find(s => s.id === campaign.default_stage_id)?.name || 'Inicial',
+                        status: 'preview',
+                        is_responsive: false,
+                        started_at: new Date().toISOString(),
+                        next_message_at: null,
+                        completed_at: null,
+                        messages: [],
+                      }}
+                      campaignId={campaignId}
+                      onClose={() => {}} // No-op since this is embedded view
+                      onCancel={() => {}} // No-op for preview
+                    />
+                    
+                    <div className="p-4 border-t border-gray-700">
+                      <button
+                        onClick={() => alert('Adicionar novo estágio (a implementar)')}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors flex items-center"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                        </svg>
+                        Adicionar Novo Estágio
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-700 p-4 rounded-lg text-center">
+                    <p className="text-gray-400">Carregando dados da campanha...</p>
+                  </div>
+                )}
+              </div>
             )}
           </>
         ) : (
