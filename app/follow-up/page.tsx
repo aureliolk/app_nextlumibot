@@ -49,6 +49,7 @@ export default function FollowUpPage() {
   const fetchCampaigns = async () => {
     try {
       const response = await axios.get('/api/follow-up/campaigns');
+      console.log('Campanhas carregadas:', response.data.data);
       setCampaigns(response.data.data || []);
     } catch (err: any) {
       console.error('Erro ao carregar campanhas:', err);
@@ -84,7 +85,7 @@ export default function FollowUpPage() {
             const steps = stepsResponse.data.data || [];
             
             // Mapear os passos para o formato esperado pelo componente FollowUpDetailModal
-            const formattedSteps = steps.map(step => ({
+            const formattedSteps = steps.map((step: any) => ({
               id: step.id,
               etapa: stage.name, // Nome da etapa do funil
               tempo_de_espera: step.wait_time,
@@ -104,6 +105,62 @@ export default function FollowUpPage() {
       }
       
       console.log(`Total de ${allSteps.length} estágios encontrados para todas as etapas`);
+      
+      // 3. Se não foram encontrados passos no banco de dados, buscar dados da campanha
+      if (allSteps.length === 0) {
+        console.log('Nenhum estágio encontrado no banco de dados, buscando dados da campanha');
+        
+        try {
+          const campaignResponse = await axios.get(`/api/follow-up/campaigns/${campaignId}`);
+          
+          if (campaignResponse.data.success && campaignResponse.data.data) {
+            let campaignSteps = [];
+            
+            // Converter steps de string para objeto se necessário
+            if (typeof campaignResponse.data.data.steps === 'string') {
+              try {
+                campaignSteps = JSON.parse(campaignResponse.data.data.steps);
+              } catch (e) {
+                console.error('Erro ao analisar steps da campanha:', e);
+              }
+            } else if (Array.isArray(campaignResponse.data.data.steps)) {
+              campaignSteps = campaignResponse.data.data.steps;
+            }
+            
+            // Mapear para o formato esperado
+            const formattedCampaignSteps = campaignSteps.map((step: any, index: number) => {
+              if (step.stage_name) {
+                return {
+                  id: `campaign-step-${index}`,
+                  etapa: step.stage_name,
+                  tempo_de_espera: step.wait_time || '',
+                  template_name: step.template_name || '',
+                  message: step.message || '',
+                  stage_name: step.stage_name
+                };
+              } else if (step.etapa) {
+                return {
+                  id: `campaign-step-${index}`,
+                  etapa: step.etapa,
+                  tempo_de_espera: step.tempo_de_espera || '',
+                  template_name: step.nome_template || '',
+                  message: step.mensagem || '',
+                  stage_name: step.etapa
+                };
+              }
+              return null;
+            }).filter(Boolean);
+            
+            if (formattedCampaignSteps.length > 0) {
+              console.log(`Adicionados ${formattedCampaignSteps.length} passos da própria campanha`);
+              allSteps.push(...formattedCampaignSteps);
+            }
+          }
+        } catch (campaignError) {
+          console.error('Erro ao buscar dados da campanha:', campaignError);
+        }
+      }
+      
       setCampaignSteps(allSteps);
       
     } catch (err) {
@@ -238,13 +295,16 @@ export default function FollowUpPage() {
               />
             </div>
 
-            <FollowUpDetailModal 
-              followUp={selectedFollowUp}
-              campaignSteps={campaignSteps}
-              onClose={() => setSelectedFollowUp(null)}
-              onCancel={handleCancelFollowUp}
-              onRemoveClient={handleRemoveClient}
-            />
+            {selectedFollowUp && (
+              <FollowUpDetailModal 
+                followUp={selectedFollowUp}
+                campaignSteps={campaignSteps}
+                onClose={() => setSelectedFollowUp(null)}
+                onCancel={handleCancelFollowUp}
+                onRemoveClient={handleRemoveClient}
+                isLoading={isLoading}
+              />
+            )}
 
         </div>
       </div>

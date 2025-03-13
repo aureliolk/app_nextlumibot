@@ -12,6 +12,7 @@ interface FollowUpDetailModalProps {
   onResume?: (id: string) => void;
   onAdvance?: (id: string) => void;
   onRemoveClient?: (id: string) => void;
+  isLoading?: boolean;
 }
 
 export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
@@ -21,7 +22,8 @@ export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
   onCancel,
   onResume,
   onAdvance,
-  onRemoveClient
+  onRemoveClient,
+  isLoading = false
 }) => {
   if (!followUp) return null;
 
@@ -131,14 +133,16 @@ export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
           {/* Etapas do Funil e Estágios */}
           <div className="mt-4">
             <h3 className="text-lg font-medium text-white mb-2">Etapas e Estágios do Funil</h3>
-            {campaignSteps.length > 0 ? (
+            {isLoading ? (
+              <div className="flex justify-center items-center p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500"></div>
+                <span className="ml-2 text-gray-400">Carregando estágios...</span>
+              </div>
+            ) : campaignSteps.length > 0 ? (
               <div className="bg-gray-700 rounded-lg overflow-hidden">
                 <div className="max-h-80 overflow-y-auto">
                   {/* Agrupar os estágios por etapa do funil */}
                   {(() => {
-                    // Log para debug - verificar o conteúdo de campaignSteps
-                    console.log("campaignSteps recebidos no modal:", campaignSteps);
-                    
                     // Função para agrupar estágios por etapa do funil
                     const etapas: Record<string, typeof campaignSteps> = {};
                     
@@ -146,17 +150,13 @@ export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
                     campaignSteps.forEach((step, index) => {
                       // Verificar todos os campos possíveis para o nome da etapa
                       const etapaFunil = step.etapa || step.stage_name || 'Sem etapa definida';
-                      console.log(`Processando estágio ${index} - Etapa: "${etapaFunil}"`);
                       
                       if (!etapas[etapaFunil]) {
                         etapas[etapaFunil] = [];
-                        console.log(`Criando novo grupo para etapa: "${etapaFunil}"`);
                       }
                       
                       etapas[etapaFunil].push({...step, originalIndex: index});
                     });
-                    
-                    console.log("Etapas agrupadas:", Object.keys(etapas));
                     
                     // Ordenar as etapas pela propriedade stage_order se disponível
                     // Caso contrário, usar uma ordem predefinida como fallback
@@ -191,8 +191,6 @@ export const FollowUpDetailModal: React.FC<FollowUpDetailModalProps> = ({
                         
                         return indexA - indexB;
                       });
-                    
-                    console.log("Etapas ordenadas:", etapasOrdenadas.map(([etapa]) => etapa));
                     
                     // Renderizar cada etapa do funil com seus estágios
                     return etapasOrdenadas.map(([etapaFunil, estagios], etapaIndex) => {

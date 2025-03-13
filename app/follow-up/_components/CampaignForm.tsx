@@ -74,6 +74,52 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
     }
   }, [newStep.stage_id, funnelStages]);
   
+  // Carregar estágios do funil ao iniciar
+  useEffect(() => {
+    const initForm = async () => {
+      try {
+        if (initialData?.steps && Array.isArray(initialData.steps)) {
+          // Se já tiver etapas iniciais, mapear para o formato correto se necessário
+          const formattedSteps = initialData.steps.map(step => {
+            // Se o formato for { stage_name, wait_time, message, template_name }
+            if (step.stage_name) {
+              const stage = funnelStages.find(s => s.name === step.stage_name);
+              return {
+                stage_id: stage?.id || '',
+                stage_name: step.stage_name,
+                template_name: step.template_name || '',
+                wait_time: step.wait_time || '',
+                message: step.message || '',
+                category: step.category || 'Utility',
+                auto_respond: step.auto_respond !== undefined ? step.auto_respond : true
+              };
+            }
+            // Se o formato for { etapa, mensagem, tempo_de_espera, nome_template }
+            else if (step.etapa) {
+              const stage = funnelStages.find(s => s.name === step.etapa);
+              return {
+                stage_id: stage?.id || '',
+                stage_name: step.etapa,
+                template_name: step.nome_template || '',
+                wait_time: step.tempo_de_espera || '',
+                message: step.mensagem || '',
+                category: step.categoria || 'Utility',
+                auto_respond: step.resposta_automatica === 'Sim'
+              };
+            }
+            return step;
+          });
+          
+          setSteps(formattedSteps);
+        }
+      } catch (error) {
+        console.error('Erro ao inicializar formulário:', error);
+      }
+    };
+    
+    initForm();
+  }, [initialData, funnelStages]);
+  
   const handleAddStep = () => {
     if (!newStep.stage_id || !newStep.template_name || !newStep.wait_time || !newStep.message) {
       alert('Preencha todos os campos obrigatórios para adicionar uma etapa');
