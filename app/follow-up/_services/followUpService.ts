@@ -86,6 +86,61 @@ export const followUpService = {
       throw error;
     }
   },
+  
+  // Função para criar um novo estágio do funil
+  async createFunnelStage(name: string, description?: string, order?: number): Promise<FunnelStage> {
+    try {
+      const response = await axios.post('/api/follow-up/funnel-stages', {
+        name,
+        description,
+        order
+      });
+      
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to create funnel stage');
+      }
+      
+      return response.data.data;
+    } catch (error) {
+      console.error('Error creating funnel stage:', error);
+      throw error;
+    }
+  },
+  
+  // Função para atualizar um estágio do funil
+  async updateFunnelStage(id: string, data: { name: string, description?: string, order?: number }): Promise<FunnelStage> {
+    try {
+      const response = await axios.put('/api/follow-up/funnel-stages', {
+        id,
+        ...data
+      });
+      
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to update funnel stage');
+      }
+      
+      return response.data.data;
+    } catch (error) {
+      console.error('Error updating funnel stage:', error);
+      throw error;
+    }
+  },
+  
+  // Função para excluir um estágio do funil
+  async deleteFunnelStage(id: string): Promise<boolean> {
+    try {
+      const response = await axios.delete(`/api/follow-up/funnel-stages?id=${id}`);
+      
+      if (!response.data.success) {
+        throw new Error(response.data.error || 'Failed to delete funnel stage');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error deleting funnel stage:', error);
+      throw error;
+    }
+  },
 
   // Função para buscar passos de um estágio específico
   async getFunnelSteps(stageId: string): Promise<FunnelStep[]> {

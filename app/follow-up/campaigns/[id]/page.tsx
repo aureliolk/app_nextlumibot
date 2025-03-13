@@ -23,6 +23,7 @@ export default function EditCampaignPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [funnelStages, setFunnelStages] = useState<FunnelStage[]>([]);
+  const [isLoadingFunnelStage, setIsLoadingFunnelStage] = useState(false);
   
   // Buscar todos os dados necessários com uma única função
   const fetchAllData = async () => {
@@ -58,11 +59,11 @@ export default function EditCampaignPage() {
     fetchAllData();
   }, [campaignId]);
   
-  // Função para atualizar a campanha
+  // Função para atualizar a campanha completa
   const handleUpdateCampaign = async (formData: any) => {
     setIsSubmitting(true);
     try {
-      // Usar axios diretamente aqui pois o serviço ainda não tem esta funcionalidade
+      // Usar o serviço centralizado para atualizar a campanha completa
       const response = await followUpService.updateCampaign(campaignId, formData);
       
       // Atualizar todos os dados de uma vez após o salvamento
@@ -74,6 +75,160 @@ export default function EditCampaignPage() {
       setError(err.message || 'Erro ao atualizar campanha');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+  
+  // Função para adicionar um estágio (passo) diretamente
+  const handleAddStep = async (newStep: any) => {
+    try {
+      // Buscar a campanha atual para obter os passos existentes
+      const currentCampaign = await followUpService.getCampaign(campaignId);
+      
+      // Criar uma nova lista de passos incluindo o novo
+      const updatedSteps = [...(currentCampaign.steps || []), newStep];
+      
+      // Atualizar a campanha com a nova lista de passos
+      await followUpService.updateCampaign(campaignId, {
+        ...currentCampaign,
+        steps: updatedSteps
+      });
+      
+      // Atualizar dados locais
+      fetchAllData();
+      
+      return true;
+    } catch (error) {
+      console.error('Erro ao adicionar estágio:', error);
+      return false;
+    }
+  };
+  
+  // Função para atualizar um estágio (passo) existente
+  const handleUpdateStep = async (index: number, updatedStep: any) => {
+    try {
+      // Buscar a campanha atual para obter os passos existentes
+      const currentCampaign = await followUpService.getCampaign(campaignId);
+      
+      // Verificar se o índice é válido
+      if (!currentCampaign.steps || index >= currentCampaign.steps.length) {
+        console.error('Índice do estágio inválido');
+        return false;
+      }
+      
+      // Atualizar o passo específico
+      const updatedSteps = [...currentCampaign.steps];
+      updatedSteps[index] = updatedStep;
+      
+      // Atualizar a campanha com a lista de passos atualizada
+      await followUpService.updateCampaign(campaignId, {
+        ...currentCampaign,
+        steps: updatedSteps
+      });
+      
+      // Atualizar dados locais
+      fetchAllData();
+      
+      return true;
+    } catch (error) {
+      console.error('Erro ao atualizar estágio:', error);
+      return false;
+    }
+  };
+  
+  // Função para remover um estágio (passo)
+  const handleRemoveStep = async (index: number, step: any) => {
+    try {
+      // Buscar a campanha atual para obter os passos existentes
+      const currentCampaign = await followUpService.getCampaign(campaignId);
+      
+      // Verificar se o índice é válido
+      if (!currentCampaign.steps || index >= currentCampaign.steps.length) {
+        console.error('Índice do estágio inválido');
+        return false;
+      }
+      
+      // Remover o passo específico
+      const updatedSteps = [...currentCampaign.steps];
+      updatedSteps.splice(index, 1);
+      
+      // Atualizar a campanha com a lista de passos atualizada
+      await followUpService.updateCampaign(campaignId, {
+        ...currentCampaign,
+        steps: updatedSteps
+      });
+      
+      // Atualizar dados locais
+      fetchAllData();
+      
+      return true;
+    } catch (error) {
+      console.error('Erro ao remover estágio:', error);
+      return false;
+    }
+  };
+  
+  // Função para adicionar um estágio de funil
+  const handleAddFunnelStage = async (newStage: Omit<FunnelStage, 'id'>) => {
+    setIsLoadingFunnelStage(true);
+    try {
+      await followUpService.createFunnelStage(
+        newStage.name,
+        newStage.description,
+        newStage.order
+      );
+      
+      // Atualizar a lista de estágios
+      const stages = await followUpService.getFunnelStages();
+      setFunnelStages(stages);
+      
+      return true;
+    } catch (error) {
+      console.error('Erro ao adicionar estágio do funil:', error);
+      return false;
+    } finally {
+      setIsLoadingFunnelStage(false);
+    }
+  };
+  
+  // Função para atualizar um estágio de funil
+  const handleUpdateFunnelStage = async (stageId: string, updatedStage: Partial<FunnelStage>) => {
+    setIsLoadingFunnelStage(true);
+    try {
+      await followUpService.updateFunnelStage(stageId, {
+        name: updatedStage.name || '',
+        description: updatedStage.description,
+        order: updatedStage.order
+      });
+      
+      // Atualizar a lista de estágios
+      const stages = await followUpService.getFunnelStages();
+      setFunnelStages(stages);
+      
+      return true;
+    } catch (error) {
+      console.error('Erro ao atualizar estágio do funil:', error);
+      return false;
+    } finally {
+      setIsLoadingFunnelStage(false);
+    }
+  };
+  
+  // Função para remover um estágio de funil
+  const handleRemoveFunnelStage = async (stageId: string) => {
+    setIsLoadingFunnelStage(true);
+    try {
+      await followUpService.deleteFunnelStage(stageId);
+      
+      // Atualizar a lista de estágios
+      const stages = await followUpService.getFunnelStages();
+      setFunnelStages(stages);
+      
+      return true;
+    } catch (error) {
+      console.error('Erro ao remover estágio do funil:', error);
+      return false;
+    } finally {
+      setIsLoadingFunnelStage(false);
     }
   };
   
@@ -125,6 +280,14 @@ export default function EditCampaignPage() {
               onSubmit={handleUpdateCampaign}
               onCancel={() => router.push('/follow-up/campaigns')}
               isLoading={isSubmitting || isLoadingSteps}
+              // Operações individuais de estágios
+              onAddStep={handleAddStep}
+              onUpdateStep={handleUpdateStep}
+              onRemoveStep={handleRemoveStep}
+              onAddFunnelStage={handleAddFunnelStage}
+              onUpdateFunnelStage={handleUpdateFunnelStage}
+              onRemoveFunnelStage={handleRemoveFunnelStage}
+              immediateUpdate={true} // Ativar a persistência imediata
             />
           </>
         ) : (

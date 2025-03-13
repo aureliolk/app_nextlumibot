@@ -134,3 +134,115 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
+// Endpoint para atualizar um estágio existente
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const { id, name, description, order } = body;
+    
+    if (!id || !name) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "ID e nome do estágio são obrigatórios" 
+        }, 
+        { status: 400 }
+      );
+    }
+    
+    // Verificar se o estágio existe
+    const existingStage = await prisma.followUpFunnelStage.findUnique({
+      where: { id }
+    });
+    
+    if (!existingStage) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "Estágio não encontrado" 
+        }, 
+        { status: 404 }
+      );
+    }
+    
+    // Atualizar o estágio
+    const updatedStage = await prisma.followUpFunnelStage.update({
+      where: { id },
+      data: {
+        name,
+        description,
+        order: order !== undefined ? order : existingStage.order
+      }
+    });
+    
+    return NextResponse.json({
+      success: true,
+      message: "Estágio atualizado com sucesso",
+      data: updatedStage
+    });
+    
+  } catch (error) {
+    console.error("Erro ao atualizar estágio do funil:", error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: "Erro interno do servidor" 
+      }, 
+      { status: 500 }
+    );
+  }
+}
+
+// Endpoint para excluir um estágio do funil
+export async function DELETE(req: NextRequest) {
+  try {
+    const url = new URL(req.url);
+    const id = url.searchParams.get('id');
+    
+    if (!id) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "ID do estágio é obrigatório" 
+        }, 
+        { status: 400 }
+      );
+    }
+    
+    // Verificar se o estágio existe
+    const existingStage = await prisma.followUpFunnelStage.findUnique({
+      where: { id }
+    });
+    
+    if (!existingStage) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: "Estágio não encontrado" 
+        }, 
+        { status: 404 }
+      );
+    }
+    
+    // Excluir o estágio
+    await prisma.followUpFunnelStage.delete({
+      where: { id }
+    });
+    
+    return NextResponse.json({
+      success: true,
+      message: "Estágio excluído com sucesso"
+    });
+    
+  } catch (error) {
+    console.error("Erro ao excluir estágio do funil:", error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: "Erro interno do servidor" 
+      }, 
+      { status: 500 }
+    );
+  }
+}

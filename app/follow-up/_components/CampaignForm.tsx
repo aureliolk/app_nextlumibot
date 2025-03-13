@@ -25,10 +25,10 @@ interface Step {
 interface FunnelStagesTabsProps {
   steps: Step[];
   onRemoveStep: (index: number) => void;
-  onMoveStep: (index: number, direction: 'up' | 'down') => void;
+  onEditStep: (index: number) => void;
 }
 
-function FunnelStagesTabs({ steps, onRemoveStep, onMoveStep }: FunnelStagesTabsProps) {
+function FunnelStagesTabs({ steps, onRemoveStep, onEditStep }: FunnelStagesTabsProps) {
   // Agrupar os estágios por etapa do funil
   const stageGroups = useMemo(() => {
     const groups: Record<string, Step[]> = {};
@@ -83,8 +83,12 @@ function FunnelStagesTabs({ steps, onRemoveStep, onMoveStep }: FunnelStagesTabsP
       <div className="flex overflow-x-auto border-b border-gray-700">
         {stageGroups.map(([stageName, stageSteps], index) => (
           <button
+            type="button"
             key={stageName}
-            onClick={() => setActiveStage(stageName)}
+            onClick={(e) => {
+              e.preventDefault();
+              setActiveStage(stageName);
+            }}
             className={`px-6 py-3 whitespace-nowrap ${
               activeStage === stageName
                 ? 'text-orange-500 border-b-2 border-orange-500 font-medium'
@@ -96,9 +100,8 @@ function FunnelStagesTabs({ steps, onRemoveStep, onMoveStep }: FunnelStagesTabsP
         ))}
       </div>
       
-      {/* Conteúdo da guia ativa */}
+      {/* Conteúdo da guia ativa - Removido título duplicado */}
       <div className="p-4">
-        <h3 className="text-lg font-medium text-orange-500 mb-4">{activeStage}</h3>
         
         <table className="min-w-full divide-y divide-gray-600">
           <thead className="bg-gray-800/50">
@@ -134,23 +137,24 @@ function FunnelStagesTabs({ steps, onRemoveStep, onMoveStep }: FunnelStagesTabsP
                     <div className="flex space-x-2">
                       <button
                         type="button"
-                        onClick={() => onMoveStep(stepIndex, 'up')}
-                        disabled={stepIndex === 0}
-                        className={`text-gray-400 ${stepIndex === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onEditStep(stepIndex);
+                        }}
+                        className="text-blue-400 hover:text-blue-300"
                       >
-                        ↑
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
                       </button>
                       <button
                         type="button"
-                        onClick={() => onMoveStep(stepIndex, 'down')}
-                        disabled={stepIndex === steps.length - 1}
-                        className={`text-gray-400 ${stepIndex === steps.length - 1 ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`}
-                      >
-                        ↓
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onRemoveStep(stepIndex)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onRemoveStep(stepIndex);
+                        }}
                         className="text-red-400 hover:text-red-300"
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -184,6 +188,13 @@ interface CampaignFormProps {
   }) => void;
   onCancel: () => void;
   isLoading: boolean;
+  onAddStep?: (newStep: Step) => Promise<boolean>; // retorna sucesso/falha
+  onUpdateStep?: (index: number, updatedStep: Step) => Promise<boolean>;
+  onRemoveStep?: (index: number, step: Step) => Promise<boolean>;
+  onAddFunnelStage?: (newStage: Omit<FunnelStage, 'id'>) => Promise<boolean>;
+  onUpdateFunnelStage?: (stageId: string, updatedStage: Partial<FunnelStage>) => Promise<boolean>;
+  onRemoveFunnelStage?: (stageId: string) => Promise<boolean>;
+  immediateUpdate?: boolean; // se true, cada operação será persistida imediatamente
 }
 
 const CampaignForm: React.FC<CampaignFormProps> = ({
@@ -191,14 +202,34 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
   initialData,
   onSubmit,
   onCancel,
-  isLoading
+  isLoading,
+  onAddStep,
+  onUpdateStep,
+  onRemoveStep,
+  onAddFunnelStage,
+  onUpdateFunnelStage,
+  onRemoveFunnelStage,
+  immediateUpdate = false
 }) => {
   const [name, setName] = useState(initialData?.name || '');
   const [description, setDescription] = useState(initialData?.description || '');
   const [steps, setSteps] = useState<Step[]>([]);
   const [selectedStage, setSelectedStage] = useState<string>('');
+  const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
+  const [showStepForm, setShowStepForm] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(false);
   
-  // Formulário para adicionar nova etapa
+  // Estados para gerenciamento de etapas do funil
+  const [showFunnelStageForm, setShowFunnelStageForm] = useState(false);
+  const [editingFunnelStage, setEditingFunnelStage] = useState<FunnelStage | null>(null);
+  const [loadingFunnelStage, setLoadingFunnelStage] = useState(false);
+  const [newFunnelStage, setNewFunnelStage] = useState<Omit<FunnelStage, 'id'>>({
+    name: '',
+    description: '',
+    order: 0
+  });
+  
+  // Formulário para adicionar ou editar etapa
   const [newStep, setNewStep] = useState<Step>({
     stage_id: '',
     stage_name: '',
@@ -283,18 +314,119 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
     }
   }, [initialData, funnelStages]);
   
-  const handleAddStep = () => {
+  // Função para mostrar o formulário para adicionar um novo estágio
+  const handleShowAddForm = () => {
+    // Resetar o formulário para um novo estágio
+    setNewStep({
+      stage_id: '',
+      stage_name: '',
+      template_name: '',
+      wait_time: '30 minutos',
+      message: '',
+      category: 'Utility',
+      auto_respond: true
+    });
+    setEditingStepIndex(null);
+    setShowStepForm(true);
+    
+    // Rolar até o formulário
+    setTimeout(() => {
+      document.getElementById('step-form')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
+  // Função para editar um passo existente
+  const handleEditStep = (index: number) => {
+    const stepToEdit = steps[index];
+    setNewStep({
+      ...stepToEdit
+    });
+    setEditingStepIndex(index);
+    setShowStepForm(true);
+    
+    // Se o estágio está definido, selecionar o estágio correto no dropdown
+    if (stepToEdit.stage_id) {
+      setSelectedStage(stepToEdit.stage_id);
+    }
+    
+    // Rolar até o formulário de edição
+    setTimeout(() => {
+      document.getElementById('step-form')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+  
+  const handleAddOrUpdateStep = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     if (!newStep.stage_id || !newStep.template_name || !newStep.wait_time || !newStep.message) {
-      alert('Preencha todos os campos obrigatórios para adicionar uma etapa');
+      alert('Preencha todos os campos obrigatórios');
       return;
     }
     
-    setSteps([...steps, { ...newStep }]);
+    setLoadingStep(true);
+    let success = true;
     
-    // Resetar o formulário mas manter o estágio selecionado
+    try {
+      if (editingStepIndex !== null) {
+        // Estamos editando um passo existente
+        if (immediateUpdate && onUpdateStep) {
+          // Salva no banco de dados imediatamente
+          success = await onUpdateStep(editingStepIndex, { ...newStep });
+          if (!success) {
+            alert('Erro ao atualizar o estágio no servidor');
+            return;
+          }
+        }
+        
+        // Atualiza o estado local
+        const updatedSteps = [...steps];
+        updatedSteps[editingStepIndex] = { ...newStep };
+        setSteps(updatedSteps);
+        setEditingStepIndex(null); // Sair do modo de edição
+      } else {
+        // Estamos adicionando um novo passo
+        if (immediateUpdate && onAddStep) {
+          // Salva no banco de dados imediatamente
+          success = await onAddStep({ ...newStep });
+          if (!success) {
+            alert('Erro ao adicionar o estágio no servidor');
+            return;
+          }
+        }
+        
+        // Atualiza o estado local
+        setSteps([...steps, { ...newStep }]);
+      }
+      
+      // Se chegou até aqui, deu tudo certo
+      setShowStepForm(false); // Esconder o formulário
+      
+      // Resetar o formulário mas manter o estágio selecionado
+      setNewStep({
+        stage_id: newStep.stage_id,
+        stage_name: newStep.stage_name,
+        template_name: '',
+        wait_time: '30 minutos',
+        message: '',
+        category: 'Utility',
+        auto_respond: true
+      });
+    } catch (error) {
+      console.error('Erro ao salvar estágio:', error);
+      alert('Ocorreu um erro ao salvar o estágio');
+    } finally {
+      setLoadingStep(false);
+    }
+  };
+  
+  const handleCancelEdit = () => {
+    setEditingStepIndex(null);
+    setShowStepForm(false);
+    // Resetar o formulário
     setNewStep({
-      stage_id: newStep.stage_id,
-      stage_name: newStep.stage_name,
+      stage_id: '',
+      stage_name: '',
       template_name: '',
       wait_time: '30 minutos',
       message: '',
@@ -303,34 +435,133 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
     });
   };
   
-  const handleRemoveStep = (index: number) => {
-    const newSteps = [...steps];
-    newSteps.splice(index, 1);
-    setSteps(newSteps);
-  };
-  
-  const handleMoveStep = (index: number, direction: 'up' | 'down') => {
-    if ((direction === 'up' && index === 0) || 
-        (direction === 'down' && index === steps.length - 1)) {
+  const handleRemoveStep = async (index: number) => {
+    if (!confirm('Tem certeza que deseja remover este passo?')) {
       return;
     }
     
-    const newSteps = [...steps];
-    const step = newSteps[index];
+    setLoadingStep(true);
+    let success = true;
     
-    if (direction === 'up') {
-      newSteps[index] = newSteps[index - 1];
-      newSteps[index - 1] = step;
-    } else {
-      newSteps[index] = newSteps[index + 1];
-      newSteps[index + 1] = step;
+    try {
+      // Primeiro, verifica se devemos persistir a remoção no banco de dados
+      if (immediateUpdate && onRemoveStep) {
+        success = await onRemoveStep(index, steps[index]);
+        if (!success) {
+          alert('Erro ao remover o estágio no servidor');
+          return;
+        }
+      }
+      
+      // Depois atualiza o estado local
+      const newSteps = [...steps];
+      newSteps.splice(index, 1);
+      setSteps(newSteps);
+      
+      // Se estávamos editando este passo, sair do modo de edição
+      if (editingStepIndex === index) {
+        handleCancelEdit();
+      } else if (editingStepIndex !== null && editingStepIndex > index) {
+        // Ajustar o índice se removemos um passo antes do que está sendo editado
+        setEditingStepIndex(editingStepIndex - 1);
+      }
+    } catch (error) {
+      console.error('Erro ao remover estágio:', error);
+      alert('Ocorreu um erro ao remover o estágio');
+    } finally {
+      setLoadingStep(false);
+    }
+  };
+  
+  // Funções para gerenciar etapas do funil
+  const handleShowAddFunnelStageForm = () => {
+    setEditingFunnelStage(null);
+    setNewFunnelStage({
+      name: '',
+      description: '',
+      order: funnelStages.length // Próxima ordem disponível
+    });
+    setShowFunnelStageForm(true);
+  };
+  
+  const handleEditFunnelStage = (stage: FunnelStage) => {
+    setEditingFunnelStage(stage);
+    setNewFunnelStage({
+      name: stage.name,
+      description: stage.description || '',
+      order: stage.order
+    });
+    setShowFunnelStageForm(true);
+  };
+  
+  const handleCancelFunnelStageEdit = () => {
+    setEditingFunnelStage(null);
+    setShowFunnelStageForm(false);
+  };
+  
+  const handleAddOrUpdateFunnelStage = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!newFunnelStage.name) {
+      alert('O nome da etapa é obrigatório');
+      return;
     }
     
-    setSteps(newSteps);
+    setLoadingFunnelStage(true);
+    
+    try {
+      if (editingFunnelStage && onUpdateFunnelStage) {
+        // Atualizar etapa existente
+        const success = await onUpdateFunnelStage(editingFunnelStage.id, newFunnelStage);
+        if (success) {
+          setShowFunnelStageForm(false);
+          setEditingFunnelStage(null);
+        } else {
+          alert('Erro ao atualizar a etapa do funil');
+        }
+      } else if (onAddFunnelStage) {
+        // Adicionar nova etapa
+        const success = await onAddFunnelStage(newFunnelStage);
+        if (success) {
+          setShowFunnelStageForm(false);
+        } else {
+          alert('Erro ao adicionar a etapa do funil');
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao salvar etapa do funil:', error);
+      alert('Ocorreu um erro ao salvar a etapa do funil');
+    } finally {
+      setLoadingFunnelStage(false);
+    }
+  };
+  
+  const handleRemoveFunnelStage = async (stageId: string) => {
+    if (!confirm('Tem certeza que deseja remover esta etapa do funil? Todos os estágios associados também serão removidos.')) {
+      return;
+    }
+    
+    if (onRemoveFunnelStage) {
+      setLoadingFunnelStage(true);
+      try {
+        const success = await onRemoveFunnelStage(stageId);
+        if (!success) {
+          alert('Erro ao remover a etapa do funil');
+        }
+      } catch (error) {
+        console.error('Erro ao remover etapa do funil:', error);
+        alert('Ocorreu um erro ao remover a etapa do funil');
+      } finally {
+        setLoadingFunnelStage(false);
+      }
+    }
   };
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
     if (!name) {
       alert('O nome da campanha é obrigatório');
       return;
@@ -383,32 +614,223 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
           </div>
         </div>
         
-        {/* Lista de etapas já adicionadas - Visualização em formato de guias */}
+        {/* Lista de estágios já adicionados - Visualização agrupada por etapas do funil */}
+        {/* Seção para gerenciar etapas do funil */}
         <div className="mb-6">
-          <h3 className="text-lg font-medium text-white mb-2">Etapas da Campanha</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-white">Gerenciar Etapas do Funil</h3>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleShowAddFunnelStageForm();
+              }}
+              className="px-3 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center text-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+              Nova Etapa do Funil
+            </button>
+          </div>
+          
+          {/* Formulário para adicionar/editar etapas do funil */}
+          {showFunnelStageForm && (
+            <div className="bg-gray-700 p-4 rounded-lg mb-4">
+              <h4 className="text-sm font-medium text-white mb-3">
+                {editingFunnelStage ? 'Editar Etapa do Funil' : 'Adicionar Nova Etapa do Funil'}
+              </h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    Nome da Etapa *
+                  </label>
+                  <input
+                    type="text"
+                    value={newFunnelStage.name}
+                    onChange={(e) => setNewFunnelStage({ ...newFunnelStage, name: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-600 text-white rounded-md border border-gray-500"
+                    placeholder="Ex: Qualificação"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    Ordem
+                  </label>
+                  <input
+                    type="number"
+                    value={newFunnelStage.order}
+                    onChange={(e) => setNewFunnelStage({ ...newFunnelStage, order: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 bg-gray-600 text-white rounded-md border border-gray-500"
+                    min="1"
+                  />
+                </div>
+                
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    Descrição
+                  </label>
+                  <textarea
+                    value={newFunnelStage.description || ''}
+                    onChange={(e) => setNewFunnelStage({ ...newFunnelStage, description: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-600 text-white rounded-md border border-gray-500"
+                    placeholder="Descreva o objetivo desta etapa do funil"
+                    rows={2}
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCancelFunnelStageEdit();
+                  }}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddOrUpdateFunnelStage}
+                  disabled={loadingFunnelStage}
+                  className={`px-4 py-2 ${
+                    editingFunnelStage ? 'bg-blue-600 hover:bg-blue-700' : 'bg-purple-600 hover:bg-purple-700'
+                  } text-white rounded-md transition-colors ${
+                    loadingFunnelStage ? 'opacity-70 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {loadingFunnelStage ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {editingFunnelStage ? 'Salvando...' : 'Adicionando...'}
+                    </span>
+                  ) : (
+                    editingFunnelStage ? 'Salvar Alterações' : 'Adicionar Etapa'
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {/* Tabela de etapas do funil */}
+          <div className="bg-gray-700 rounded-lg overflow-hidden mb-6">
+            <table className="min-w-full divide-y divide-gray-600">
+              <thead className="bg-gray-800">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Ordem</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Nome</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Descrição</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wider">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="bg-gray-700 divide-y divide-gray-600">
+                {funnelStages.length > 0 ? (
+                  funnelStages.map((stage) => (
+                    <tr key={stage.id} className="hover:bg-gray-650 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{stage.order}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">{stage.name}</td>
+                      <td className="px-6 py-4 text-sm text-gray-300">{stage.description || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleEditFunnelStage(stage);
+                          }}
+                          className="text-blue-400 hover:text-blue-300 mx-2"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleRemoveFunnelStage(stage.id);
+                          }}
+                          className="text-red-400 hover:text-red-300 mx-2"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-4 text-center text-gray-400">
+                      Nenhuma etapa de funil cadastrada
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      
+        {/* Seção para adicionar estágios ao funil */}
+        <div className="mb-6">
+          <h3 className="text-lg font-medium text-white mb-2">Estágios da Campanha</h3>
           
           {steps.length > 0 ? (
             <div className="bg-gray-700 rounded-lg overflow-hidden mb-4">
               <FunnelStagesTabs 
                 steps={steps} 
-                onRemoveStep={handleRemoveStep} 
-                onMoveStep={handleMoveStep}
+                onRemoveStep={handleRemoveStep}
+                onEditStep={handleEditStep}
               />
             </div>
           ) : (
             <p className="text-gray-400 text-center my-4">
-              Nenhuma etapa adicionada. Use o formulário abaixo para começar.
+              Nenhum estágio adicionado. Use o botão abaixo para adicionar estágios às etapas do funil.
             </p>
           )}
           
-          {/* Formulário para adicionar nova etapa */}
-          <div className="bg-gray-700 p-4 rounded-lg">
-            <h4 className="text-sm font-medium text-white mb-3">Adicionar Nova Etapa</h4>
+          {/* Botão para adicionar novo estágio */}
+          {!showStepForm && (
+            <div className="flex justify-center mb-4">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleShowAddForm();
+                }}
+                className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors flex items-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+                Adicionar Novo Estágio
+              </button>
+            </div>
+          )}
+          
+          {/* Formulário para adicionar/editar estágio (passo) dentro de uma etapa */}
+          {showStepForm && (
+            <div id="step-form" className="bg-gray-700 p-4 rounded-lg">
+            <h4 className="text-sm font-medium text-white mb-3">
+              {editingStepIndex !== null ? 'Editar Estágio' : 'Adicionar Novo Estágio'}
+            </h4>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1">
-                  Estágio do Funil *
+                  Etapa do Funil *
                 </label>
                 <select
                   value={newStep.stage_id}
@@ -499,16 +921,45 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
               </div>
             </div>
             
-            <div className="flex justify-end">
+            <div className="flex justify-end space-x-3">
+              {editingStepIndex !== null && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCancelEdit();
+                  }}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                >
+                  Cancelar
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handleAddStep}
-                className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors"
+                onClick={handleAddOrUpdateStep}
+                disabled={loadingStep}
+                className={`px-4 py-2 ${
+                  editingStepIndex !== null ? 'bg-blue-600 hover:bg-blue-700' : 'bg-orange-600 hover:bg-orange-700'
+                } text-white rounded-md transition-colors ${
+                  loadingStep ? 'opacity-70 cursor-not-allowed' : ''
+                }`}
               >
-                Adicionar Etapa
+                {loadingStep ? (
+                  <span className="flex items-center">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    {editingStepIndex !== null ? 'Salvando...' : 'Adicionando...'}
+                  </span>
+                ) : (
+                  editingStepIndex !== null ? 'Salvar Alterações' : 'Adicionar Estágio'
+                )}
               </button>
             </div>
           </div>
+          )}
         </div>
         
         <div className="flex justify-end space-x-3">
