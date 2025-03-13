@@ -11,7 +11,8 @@ import {
   ErrorMessage
 } from '../_components';
 import MainNavigation from '../_components/MainNavigation';
-import { FollowUp } from '../_components/FollowUpTable';
+import { FollowUp } from '../_types';
+import followUpService from '../_services/followUpService';
 
 export default function KanbanPage() {
   const [followUps, setFollowUps] = useState<FollowUp[]>([]);
@@ -21,7 +22,7 @@ export default function KanbanPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFollowUp, setSelectedFollowUp] = useState<FollowUp | null>(null);
 
-  // Carregar follow-ups e estágios do funil
+  // Carregar follow-ups e estágios do funil usando o serviço centralizado
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -29,19 +30,13 @@ export default function KanbanPage() {
 
       try {
         // Buscar estágios do funil
-        const stagesResponse = await axios.get('/api/follow-up/funnel-stages');
-        if (stagesResponse.data.success) {
-          setStages(stagesResponse.data.data);
-        }
+        const funnelStages = await followUpService.getFunnelStages();
+        setStages(funnelStages);
 
         // Buscar follow-ups
-        const followUpsResponse = await axios.get('/api/follow-up', {
-          params: { status: 'active' }
-        });
-        if (followUpsResponse.data.success) {
-          setFollowUps(followUpsResponse.data.data);
-        }
-      } catch (err) {
+        const activeFollowUps = await followUpService.getFollowUps('active');
+        setFollowUps(activeFollowUps);
+      } catch (err: any) {
         console.error('Erro ao carregar dados:', err);
         setError('Erro ao carregar dados. Por favor, tente novamente.');
       } finally {
@@ -51,8 +46,6 @@ export default function KanbanPage() {
 
     fetchData();
   }, []);
-
-  // We don't need to fetch campaign steps anymore - the component will handle this
 
   // Filtrar follow-ups por termo de busca
   const filteredFollowUps = followUps.filter(followUp => {
@@ -83,53 +76,47 @@ export default function KanbanPage() {
     return false;
   });
 
-  // Função para mover um cliente para outra etapa do funil
+  // Função para mover um cliente para outra etapa do funil usando o serviço centralizado
   const handleMoveClient = async (followUpId: string, targetStageId: string) => {
     try {
-      // Chamada à API para atualizar a etapa do cliente
-      const response = await axios.put(`/api/follow-up/${followUpId}/move-stage`, {
-        stageId: targetStageId
-      });
+      // Usar o serviço centralizado para mover o cliente
+      await followUpService.moveClientToStage(followUpId, targetStageId);
       
-      if (response.data.success) {
-        // Atualizar a lista local após o sucesso da API
-        setFollowUps(prevFollowUps => 
-          prevFollowUps.map(followUp => 
-            followUp.id === followUpId 
-              ? { 
-                ...followUp, 
-                current_stage_id: targetStageId,
-                current_stage_name: stages.find(s => s.id === targetStageId)?.name || followUp.current_stage_name
-              } 
-              : followUp
-          )
-        );
-      }
+      // Atualizar a lista local após o sucesso da API
+      setFollowUps(prevFollowUps => 
+        prevFollowUps.map(followUp => 
+          followUp.id === followUpId 
+            ? { 
+              ...followUp, 
+              current_stage_id: targetStageId,
+              current_stage_name: stages.find(s => s.id === targetStageId)?.name || followUp.current_stage_name
+            } 
+            : followUp
+        )
+      );
     } catch (err) {
       console.error('Erro ao mover cliente:', err);
       setError('Erro ao mover cliente para outra etapa.');
     }
   };
 
-  // Função para cancelar um follow-up
+  // Função para cancelar um follow-up usando o serviço centralizado
   const handleCancelFollowUp = async (id: string) => {
     try {
-      const response = await axios.post(`/api/follow-up/cancel`, { id });
+      await followUpService.cancelFollowUp(id);
       
-      if (response.data.success) {
-        // Atualizar a lista local após o sucesso da API
-        setFollowUps(prevFollowUps => 
-          prevFollowUps.map(followUp => 
-            followUp.id === id 
-              ? { ...followUp, status: 'canceled' } 
-              : followUp
-          )
-        );
-        
-        // Fechar o modal se o cliente cancelado estiver selecionado
-        if (selectedFollowUp?.id === id) {
-          setSelectedFollowUp(null);
-        }
+      // Atualizar a lista local após o sucesso da API
+      setFollowUps(prevFollowUps => 
+        prevFollowUps.map(followUp => 
+          followUp.id === id 
+            ? { ...followUp, status: 'canceled' } 
+            : followUp
+        )
+      );
+      
+      // Fechar o modal se o cliente cancelado estiver selecionado
+      if (selectedFollowUp?.id === id) {
+        setSelectedFollowUp(null);
       }
     } catch (err) {
       console.error('Erro ao cancelar follow-up:', err);

@@ -1,7 +1,7 @@
 // app/follow-up/_components/CampaignForm.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
 interface FunnelStage {
   id: string;
@@ -19,6 +19,154 @@ interface Step {
   message: string;
   category?: string;
   auto_respond: boolean;
+}
+
+// Componente para visualização em formato de guias
+interface FunnelStagesTabsProps {
+  steps: Step[];
+  onRemoveStep: (index: number) => void;
+  onMoveStep: (index: number, direction: 'up' | 'down') => void;
+}
+
+function FunnelStagesTabs({ steps, onRemoveStep, onMoveStep }: FunnelStagesTabsProps) {
+  // Agrupar os estágios por etapa do funil
+  const stageGroups = useMemo(() => {
+    const groups: Record<string, Step[]> = {};
+    
+    // Primeiro, agrupar por etapa
+    steps.forEach(step => {
+      const stageName = step.stage_name || 'Sem etapa definida';
+      if (!groups[stageName]) {
+        groups[stageName] = [];
+      }
+      groups[stageName].push(step);
+    });
+    
+    // Ordenar os grupos de etapas
+    return Object.entries(groups);
+  }, [steps]);
+  
+  // Estado para controlar qual guia está ativa
+  const [activeStage, setActiveStage] = useState<string>('');
+  
+  // Atualizar a guia ativa quando os grupos forem carregados
+  useEffect(() => {
+    if (stageGroups.length > 0) {
+      setActiveStage(stageGroups[0][0]);
+    }
+  }, [stageGroups]);
+  
+  // Se não houver estágios, mostrar mensagem
+  if (stageGroups.length === 0) {
+    return (
+      <div className="p-8 text-center text-gray-400">
+        Nenhum estágio encontrado para esta campanha.
+      </div>
+    );
+  }
+  
+  // Encontrar os índices originais dos passos no array de steps
+  const getStepIndex = (step: Step) => {
+    return steps.findIndex(s => 
+      s.id === step.id && 
+      s.stage_name === step.stage_name && 
+      s.template_name === step.template_name
+    );
+  };
+  
+  // Calcular qual estágio está ativo
+  const activeSteps = stageGroups.find(([name]) => name === activeStage)?.[1] || [];
+  
+  return (
+    <div>
+      {/* Guias de navegação horizontal */}
+      <div className="flex overflow-x-auto border-b border-gray-700">
+        {stageGroups.map(([stageName, stageSteps], index) => (
+          <button
+            key={stageName}
+            onClick={() => setActiveStage(stageName)}
+            className={`px-6 py-3 whitespace-nowrap ${
+              activeStage === stageName
+                ? 'text-orange-500 border-b-2 border-orange-500 font-medium'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            {stageName} ({stageSteps.length})
+          </button>
+        ))}
+      </div>
+      
+      {/* Conteúdo da guia ativa */}
+      <div className="p-4">
+        <h3 className="text-lg font-medium text-orange-500 mb-4">{activeStage}</h3>
+        
+        <table className="min-w-full divide-y divide-gray-600">
+          <thead className="bg-gray-800/50">
+            <tr>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Ordem</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Template</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Tempo de Espera</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Mensagem</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-600">
+            {activeSteps.map((step, idx) => {
+              const stepIndex = getStepIndex(step);
+              return (
+                <tr key={`${step.id || ''}-${idx}`} className="hover:bg-gray-600/30">
+                  <td className="px-4 py-2 text-sm font-medium text-white">
+                    {stepIndex + 1}
+                  </td>
+                  <td className="px-4 py-2 text-sm text-purple-400">
+                    {step.template_name || 'Não definido'}
+                  </td>
+                  <td className="px-4 py-2 text-sm text-gray-300">
+                    {step.wait_time}
+                  </td>
+                  <td className="px-4 py-2 text-sm text-gray-300">
+                    <div className="max-w-md truncate">
+                      {step.message?.substring(0, 60)}
+                      {step.message?.length > 60 ? '...' : ''}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2 text-sm">
+                    <div className="flex space-x-2">
+                      <button
+                        type="button"
+                        onClick={() => onMoveStep(stepIndex, 'up')}
+                        disabled={stepIndex === 0}
+                        className={`text-gray-400 ${stepIndex === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onMoveStep(stepIndex, 'down')}
+                        disabled={stepIndex === steps.length - 1}
+                        className={`text-gray-400 ${stepIndex === steps.length - 1 ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`}
+                      >
+                        ↓
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onRemoveStep(stepIndex)}
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }
 
 interface CampaignFormProps {
@@ -74,106 +222,64 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
     }
   }, [newStep.stage_id, funnelStages]);
   
-  // Carregar estágios do funil e dados da campanha ao iniciar
+  // Inicializar os steps quando o componente for montado ou quando props mudarem
   useEffect(() => {
-    const initForm = async () => {
-      try {
-        // Carregar os passos do banco de dados em vez das etapas da campanha
-        const fetchFunnelData = async () => {
-          try {
-            // Buscar todos os passos de todos os estágios de uma vez só
-            const formattedSteps: Step[] = [];
-            
-            // Buscar da nova API que retorna todas as etapas e passos
-            const response = await fetch('/api/follow-up/campaigns/funnel-steps');
-            const data = await response.json();
-            
-            if (data.success && Array.isArray(data.data)) {
-              console.log(`Encontrados ${data.data.length} passos no banco de dados`);
-              
-              // Mapear os passos para o formato esperado
-              formattedSteps.push(
-                ...data.data.map(step => ({
-                  id: step.id,
-                  stage_id: step.funnel_stage_id,
-                  stage_name: step.stage_name,
-                  template_name: step.template_name,
-                  wait_time: step.wait_time,
-                  message: step.message_content,
-                  category: step.message_category || 'Utility',
-                  auto_respond: step.auto_respond
-                }))
-              );
-            } else {
-              console.log('Nenhum passo encontrado ou erro na API');
-              
-              // Fallback: criar um passo por estágio
-              for (const stage of funnelStages) {
-                formattedSteps.push({
-                  stage_id: stage.id,
-                  stage_name: stage.name,
-                  template_name: `template_${stage.name.toLowerCase().replace(/\s+/g, '_')}`,
-                  wait_time: '30 minutos',
-                  message: `Mensagem padrão para o estágio ${stage.name}`,
-                  category: 'Utility',
-                  auto_respond: true
-                });
-              }
-            }
-            
-            // Mesclar com os passos da campanha inicial, se existirem
-            if (initialData?.steps && Array.isArray(initialData.steps)) {
-              // Se já tiver etapas iniciais, mapear para o formato correto
-              const campaignSteps = initialData.steps.map(step => {
-                // Se o formato for { stage_name, wait_time, message, template_name }
-                if (step.stage_name) {
-                  const stage = funnelStages.find(s => s.name === step.stage_name);
-                  return {
-                    stage_id: stage?.id || '',
-                    stage_name: step.stage_name,
-                    template_name: step.template_name || '',
-                    wait_time: step.wait_time || '',
-                    message: step.message || '',
-                    category: step.category || 'Utility',
-                    auto_respond: step.auto_respond !== undefined ? step.auto_respond : true
-                  };
-                }
-                // Se o formato for { etapa, mensagem, tempo_de_espera, nome_template }
-                else if (step.etapa) {
-                  const stage = funnelStages.find(s => s.name === step.etapa);
-                  return {
-                    stage_id: stage?.id || '',
-                    stage_name: step.etapa,
-                    template_name: step.nome_template || '',
-                    wait_time: step.tempo_de_espera || '',
-                    message: step.mensagem || '',
-                    category: step.categoria || 'Utility',
-                    auto_respond: step.resposta_automatica === 'Sim'
-                  };
-                }
-                return step;
-              });
-              
-              // Preferir os passos da campanha inicial se existirem
-              formattedSteps.push(...campaignSteps);
-            }
-            
-            console.log(`Total de ${formattedSteps.length} passos encontrados`);
-            setSteps(formattedSteps);
-          } catch (error) {
-            console.error('Erro ao buscar dados do funil:', error);
-          }
-        };
-        
-        // Executar a busca
-        await fetchFunnelData();
-      } catch (error) {
-        console.error('Erro ao inicializar formulário:', error);
+    // Se já temos passos nos initialData, use-os diretamente
+    if (initialData?.steps && Array.isArray(initialData.steps) && initialData.steps.length > 0) {
+      console.log('Usando passos fornecidos pelo componente pai:', initialData.steps.length);
+      
+      // Mapear os passos para o formato correto e consistente
+      const formattedSteps = initialData.steps.map((step: any) => {
+        // Se o formato for { stage_name, wait_time, message, template_name }
+        if (step.stage_name) {
+          const stage = funnelStages.find(s => s.name === step.stage_name);
+          return {
+            id: step.id || '',
+            stage_id: step.stage_id || stage?.id || '',
+            stage_name: step.stage_name,
+            template_name: step.template_name || '',
+            wait_time: step.wait_time || '',
+            message: step.message || '',
+            category: step.category || 'Utility',
+            auto_respond: step.auto_respond !== undefined ? step.auto_respond : true
+          };
+        }
+        // Se o formato for { etapa, mensagem, tempo_de_espera, nome_template }
+        else if (step.etapa) {
+          const stage = funnelStages.find(s => s.name === step.etapa);
+          return {
+            id: step.id || '',
+            stage_id: step.stage_id || stage?.id || '',
+            stage_name: step.etapa,
+            template_name: step.template_name || step.nome_template || '',
+            wait_time: step.wait_time || step.tempo_de_espera || '',
+            message: step.message || step.mensagem || '',
+            category: step.category || 'Utility',
+            auto_respond: true
+          };
+        }
+        return step as Step;
+      });
+      
+      setSteps(formattedSteps);
+    } else if (funnelStages.length > 0) {
+      // Fallback: se não temos passos, criar um passo por estágio (apenas para novas campanhas)
+      if (!initialData?.id) {
+        console.log('Criando passos de exemplo para nova campanha');
+        const defaultSteps = funnelStages.map(stage => ({
+          stage_id: stage.id,
+          stage_name: stage.name,
+          template_name: `template_${stage.name.toLowerCase().replace(/\s+/g, '_')}`,
+          wait_time: '30 minutos',
+          message: `Mensagem padrão para o estágio ${stage.name}`,
+          category: 'Utility',
+          auto_respond: true
+        }));
+        setSteps(defaultSteps);
+      } else {
+        // Se é uma campanha existente mas sem passos, definir array vazio
+        setSteps([]);
       }
-    };
-    
-    if (funnelStages.length > 0) {
-      initForm();
     }
   }, [initialData, funnelStages]);
   
@@ -277,60 +383,17 @@ const CampaignForm: React.FC<CampaignFormProps> = ({
           </div>
         </div>
         
-        {/* Lista de etapas já adicionadas */}
+        {/* Lista de etapas já adicionadas - Visualização em formato de guias */}
         <div className="mb-6">
           <h3 className="text-lg font-medium text-white mb-2">Etapas da Campanha</h3>
           
           {steps.length > 0 ? (
             <div className="bg-gray-700 rounded-lg overflow-hidden mb-4">
-              <table className="min-w-full divide-y divide-gray-600">
-                <thead className="bg-gray-800">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Ordem</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Estágio do Funil</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Template</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Tempo</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-400">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-600">
-                  {steps.map((step, index) => (
-                    <tr key={index}>
-                      <td className="px-4 py-2 text-sm text-white">{index + 1}</td>
-                      <td className="px-4 py-2 text-sm text-orange-400">{step.stage_name}</td>
-                      <td className="px-4 py-2 text-sm text-gray-300">{step.template_name}</td>
-                      <td className="px-4 py-2 text-sm text-gray-300">{step.wait_time}</td>
-                      <td className="px-4 py-2 text-sm text-gray-300">
-                        <div className="flex space-x-2">
-                          <button
-                            type="button"
-                            onClick={() => handleMoveStep(index, 'up')}
-                            disabled={index === 0}
-                            className={`text-gray-400 ${index === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`}
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleMoveStep(index, 'down')}
-                            disabled={index === steps.length - 1}
-                            className={`text-gray-400 ${index === steps.length - 1 ? 'opacity-50 cursor-not-allowed' : 'hover:text-white'}`}
-                          >
-                            ↓
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveStep(index)}
-                            className="text-red-400 hover:text-red-300"
-                          >
-                            Remover
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <FunnelStagesTabs 
+                steps={steps} 
+                onRemoveStep={handleRemoveStep} 
+                onMoveStep={handleMoveStep}
+              />
             </div>
           ) : (
             <p className="text-gray-400 text-center my-4">

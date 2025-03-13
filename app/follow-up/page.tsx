@@ -2,7 +2,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 
 // Importando os componentes
 import {
@@ -11,13 +10,14 @@ import {
   NewFollowUpForm,
   FollowUpTable,
   FollowUpDetailModal,
-  Footer,
-  Header
+  Footer
 } from './_components';
 import MainNavigation from './_components/MainNavigation';
 
-// Importando os tipos
-import { FollowUp, Campaign, CampaignStep } from './_types';
+// Importando os tipos e serviços
+import { FollowUp, Campaign } from './_types';
+import followUpService from './_services/followUpService';
+import axios from 'axios';
 
 export default function FollowUpPage() {
   // Estados
@@ -30,47 +30,42 @@ export default function FollowUpPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewForm, setShowNewForm] = useState(false);
 
-  // Função para carregar os follow-ups
+  // Função para carregar os follow-ups usando o serviço centralizado
   const fetchFollowUps = async () => {
     try {
       setIsLoading(true);
-      const response = await axios.get(`/api/follow-up?status=${activeTab}`);
-      setFollowUps(response.data.data || []);
+      const data = await followUpService.getFollowUps(activeTab);
+      setFollowUps(data);
     } catch (err: any) {
       console.error('Erro ao carregar follow-ups:', err);
-      setError(err.response?.data?.error || 'Falha ao carregar dados');
+      setError(err.message || 'Falha ao carregar dados');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Função para carregar as campanhas
+  // Função para carregar as campanhas usando o serviço centralizado
   const fetchCampaigns = async () => {
     try {
-      const response = await axios.get('/api/follow-up/campaigns');
-      console.log('Campanhas carregadas:', response.data.data);
-      setCampaigns(response.data.data || []);
+      const data = await followUpService.getCampaigns();
+      setCampaigns(data);
     } catch (err: any) {
       console.error('Erro ao carregar campanhas:', err);
     }
   };
-
-  // We don't need to fetch campaign steps anymore - the component will handle this
 
   // Buscar dados ao carregar a página e quando a tab muda
   useEffect(() => {
     fetchFollowUps();
     fetchCampaigns();
   }, [activeTab]);
-  
-  // We don't need this anymore since the component handles fetching campaign steps
 
   // Filtrar follow-ups pelo termo de busca
   const filteredFollowUps = followUps.filter(followUp => 
     followUp.client_id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Função para cancelar um follow-up
+  // Função para cancelar um follow-up usando o serviço centralizado
   const handleCancelFollowUp = async (id: string) => {
     if (!confirm('Tem certeza que deseja cancelar este follow-up?')) {
       return;
@@ -78,7 +73,7 @@ export default function FollowUpPage() {
 
     try {
       setIsLoading(true);
-      await axios.post('/api/follow-up/cancel', { followUpId: id });
+      await followUpService.cancelFollowUp(id);
       fetchFollowUps();
       if (selectedFollowUp?.id === id) {
         setSelectedFollowUp(null);
@@ -91,7 +86,7 @@ export default function FollowUpPage() {
     }
   };
 
-  // Função para remover um cliente
+  // Função para remover um cliente usando o serviço centralizado
   const handleRemoveClient = async (clientId: string) => {
     if (!confirm(`Tem certeza que deseja remover todos os follow-ups do cliente "${clientId}"?`)) {
       return;
@@ -99,7 +94,7 @@ export default function FollowUpPage() {
 
     try {
       setIsLoading(true);
-      await axios.post('/api/follow-up/remove-client', { clientId });
+      await followUpService.removeClient(clientId);
       fetchFollowUps();
       if (selectedFollowUp?.client_id === clientId) {
         setSelectedFollowUp(null);
@@ -112,7 +107,7 @@ export default function FollowUpPage() {
     }
   };
 
-  // Função para criar um novo follow-up
+  // Função para criar um novo follow-up usando o serviço centralizado
   const handleCreateFollowUp = async (clientId: string, campaignId: string) => {
     if (!clientId || !campaignId) {
       setError('Cliente e campanha são obrigatórios');
@@ -121,15 +116,12 @@ export default function FollowUpPage() {
 
     try {
       setIsLoading(true);
-      await axios.post('/api/follow-up', {
-        clientId,
-        campaignId
-      });
+      await followUpService.createFollowUp(clientId, campaignId);
       setShowNewForm(false);
       fetchFollowUps();
     } catch (err: any) {
       console.error('Erro ao criar follow-up:', err);
-      setError(err.response?.data?.error || 'Falha ao criar follow-up');
+      setError(err.message || 'Falha ao criar follow-up');
     } finally {
       setIsLoading(false);
     }
