@@ -86,7 +86,24 @@ async function importProducts() {
     }
     
     // Lê o arquivo JSON
-    const productsData = JSON.parse(fs.readFileSync(jsonFilePath, 'utf8'));
+    let productsData = JSON.parse(fs.readFileSync(jsonFilePath, 'utf8'));
+    
+    // Criar um mapa para armazenar produtos pelo slug e pegar o nome da primeira variante
+    const productNameMap = {};
+    productsData.forEach(product => {
+      if (product.name && product.slug && !productNameMap[product.slug]) {
+        productNameMap[product.slug] = product.name;
+      }
+    });
+    
+    // Preencher nomes vazios com o nome do produto principal
+    productsData = productsData.map(product => {
+      if (!product.name && productNameMap[product.slug]) {
+        return { ...product, name: productNameMap[product.slug] };
+      }
+      return product;
+    });
+    
     console.log(`Importando ${productsData.length} produtos...`);
     
     // Contador de produtos importados
