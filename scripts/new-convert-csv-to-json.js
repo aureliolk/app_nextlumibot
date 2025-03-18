@@ -114,8 +114,8 @@ function convertCsvToJson(inputFile, outputFile) {
 }
 
 // Configurar arquivos de entrada e saída
-const inputFile = 'tiendanube-782202-17410478381561394406.csv';
-const outputFile = 'produtos.json';
+const inputFile = './public/produtos_atualizados.csv';
+const outputFile = './public/produtos.json';
 
 // Executar a conversão
 convertCsvToJson(inputFile, outputFile);

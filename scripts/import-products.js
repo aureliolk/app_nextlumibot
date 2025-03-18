@@ -27,7 +27,7 @@ const pool = new Pool({
 async function importProducts() {
   try {
     // Caminho para o arquivo JSON
-    const jsonFilePath = path.join(__dirname, '..', 'public', 'products.json');
+    const jsonFilePath = path.join(__dirname, '..', 'public', 'produtos.json');
     
     // Lê o arquivo JSON
     const productsData = JSON.parse(fs.readFileSync(jsonFilePath, 'utf8'));
@@ -43,8 +43,13 @@ async function importProducts() {
         // Verifica se o produto já existe pelo URL
         const checkResult = await pool.query(
           'SELECT id FROM products WHERE url = $1',
-          [product.url]
+          [product.slug]
         );
+        
+        // Verifica se tem preço promocional e usa ele se disponível
+        const finalPrice = product.promotional_price !== null && product.promotional_price !== undefined 
+          ? product.promotional_price 
+          : product.price;
         
         if (checkResult.rows.length > 0) {
           // Atualiza o produto existente
@@ -55,7 +60,7 @@ async function importProducts() {
              WHERE url = $10`,
             [
               product.name,
-              product.price,
+              finalPrice,
               product.description || '',
               product.brand || '',
               product.gender || '',
@@ -63,7 +68,7 @@ async function importProducts() {
               JSON.stringify(product.categories || []),
               JSON.stringify(product.variations || []),
               product.active !== undefined ? product.active : true,
-              product.url
+              product.slug
             ]
           );
           console.log(`Produto atualizado: ${product.name}`);
@@ -75,8 +80,8 @@ async function importProducts() {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
             [
               product.name,
-              product.url,
-              product.price,
+              product.slug,
+              finalPrice,
               product.description || '',
               product.brand || '',
               product.gender || '',

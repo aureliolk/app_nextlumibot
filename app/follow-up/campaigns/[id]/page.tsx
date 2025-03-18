@@ -14,9 +14,9 @@ import { Campaign, CampaignStep, FunnelStage } from '../../_types';
 export default function EditCampaignPage() {
   const params = useParams();
   const router = useRouter();
-  const campaignId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const campaignId = Array.isArray(params.id) ? params.id[0] : params.id as any;
   
-  const [campaign, setCampaign] = useState<Campaign | null>(null);
+  const [campaign, setCampaign] = useState<Campaign | null >(null);
   const [campaignSteps, setCampaignSteps] = useState<CampaignStep[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingSteps, setIsLoadingSteps] = useState(true);
@@ -42,7 +42,7 @@ export default function EditCampaignPage() {
       
       console.log(`Dados carregados: campanha, ${stages.length} estágios, ${steps.length} passos`);
       
-      setCampaign(campaignData);
+      setCampaign(campaignData );
       setFunnelStages(stages);
       setCampaignSteps(steps);
     } catch (err: any) {
@@ -138,18 +138,41 @@ export default function EditCampaignPage() {
   // Função para remover um estágio (passo)
   const handleRemoveStep = async (index: number, step: any) => {
     try {
+      console.log(`Removendo estágio no índice ${index}:`, step);
+      
       // Buscar a campanha atual para obter os passos existentes
       const currentCampaign = await followUpService.getCampaign(campaignId);
+      console.log('Campanha atual:', currentCampaign);
+      
+      // Verificar se a campanha tem passos
+      if (!currentCampaign.steps || !Array.isArray(currentCampaign.steps)) {
+        console.error('Campanha não tem passos ou formato inválido');
+        return false;
+      }
       
       // Verificar se o índice é válido
-      if (!currentCampaign.steps || index >= currentCampaign.steps.length) {
-        console.error('Índice do estágio inválido');
-        return false;
+      if (index < 0 || index >= currentCampaign.steps.length) {
+        console.error(`Índice do estágio inválido: ${index} (total: ${currentCampaign.steps.length})`);
+        
+        // Tentar encontrar o estágio pelo ID como fallback
+        if (step.id) {
+          const stepIndex = currentCampaign.steps.findIndex((s: any) => s.id === step.id);
+          if (stepIndex !== -1) {
+            console.log(`Encontrado índice pelo ID: ${stepIndex}`);
+            index = stepIndex;
+          } else {
+            return false;
+          }
+        } else {
+          return false;
+        }
       }
       
       // Remover o passo específico
       const updatedSteps = [...currentCampaign.steps];
       updatedSteps.splice(index, 1);
+      
+      console.log(`Atualizando campanha após remoção. Total de passos: ${updatedSteps.length}`);
       
       // Atualizar a campanha com a lista de passos atualizada
       await followUpService.updateCampaign(campaignId, {
@@ -158,7 +181,7 @@ export default function EditCampaignPage() {
       });
       
       // Atualizar dados locais
-      fetchAllData();
+      await fetchAllData();
       
       return true;
     } catch (error) {
@@ -286,7 +309,7 @@ export default function EditCampaignPage() {
                       auto_respond: true
                     }))
                   : campaign?.steps || []
-              }}
+              }} 
               onSubmit={handleUpdateCampaign}
               onCancel={() => router.push('/follow-up/campaigns')}
               isLoading={isSubmitting || isLoadingSteps}
